@@ -11,6 +11,7 @@ const VoucherPurchase: React.FC = () => {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [voucherCode, setVoucherCode] = useState('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -20,20 +21,36 @@ const VoucherPurchase: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setMessage({ type: '', text: '' });
+    setVoucherCode('');
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      const voucherCode = `WUC${Date.now().toString().slice(-8)}`;
-      setMessage({
-        type: 'success',
-        text: `Payment successful! Your voucher code is: ${voucherCode}. Check your email and SMS for details.`
+      const response = await fetch('http://localhost:5000/api/vouchers/purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
       });
-      setFormData({ firstName: '', lastName: '', email: '', phone: '', paymentMethod: '' });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setVoucherCode(data.voucherCode);
+        setMessage({
+          type: 'success',
+          text: `Payment successful! Your voucher code is displayed below. An email has also been sent to ${formData.email}.`
+        });
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Payment failed. Please try again.' });
+      }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Payment failed. Please try again.' });
+      setMessage({ type: 'error', text: 'Connection error. Please try again.' });
     } finally {
       setLoading(false);
     }
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(voucherCode);
+    alert('Voucher code copied to clipboard!');
   };
 
   return (
@@ -58,6 +75,44 @@ const VoucherPurchase: React.FC = () => {
 
           {message.text && (
             <div className={`alert alert-${message.type === 'success' ? 'success' : 'error'}`}>{message.text}</div>
+          )}
+
+          {voucherCode && (
+            <div style={{ 
+              background: '#003366', 
+              color: 'white', 
+              padding: '2rem', 
+              borderRadius: '8px', 
+              textAlign: 'center',
+              marginBottom: '2rem'
+            }}>
+              <h3 style={{ marginBottom: '1rem', color: 'white' }}>Your Voucher Code</h3>
+              <div style={{ 
+                fontSize: '2rem', 
+                fontWeight: 'bold', 
+                letterSpacing: '0.2rem',
+                marginBottom: '1rem'
+              }}>
+                {voucherCode}
+              </div>
+              <button 
+                onClick={copyToClipboard}
+                style={{
+                  background: 'white',
+                  color: '#003366',
+                  border: 'none',
+                  padding: '0.75rem 2rem',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}
+              >
+                📋 Copy Code
+              </button>
+              <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#e0e0e0' }}>
+                Save this code! You'll need it to complete your application.
+              </p>
+            </div>
           )}
 
           <form onSubmit={handleSubmit}>
@@ -102,10 +157,11 @@ const VoucherPurchase: React.FC = () => {
         <div className="card" style={{ background: '#fef3c7' }}>
           <h3 style={{ marginBottom: '0.5rem', color: '#92400e' }}>Important Notes:</h3>
           <ul style={{ lineHeight: '1.8', paddingLeft: '1.5rem', color: '#78350f' }}>
-            <li>Your voucher code will be sent to your email and phone number</li>
+            <li>Your voucher code will be displayed on screen immediately after payment</li>
+            <li>A confirmation email will also be sent to your email address</li>
             <li>Keep your voucher code safe - you'll need it to complete your application</li>
             <li>Voucher is valid for 30 days from purchase date</li>
-            <li>If you don't receive your voucher, contact admissions@wuc.edu.gh</li>
+            <li>If you have any issues, contact admissions@wuc.edu.gh</li>
           </ul>
         </div>
       </div>

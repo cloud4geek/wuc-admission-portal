@@ -96,11 +96,21 @@ const uploadDocuments = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Application not found' });
     }
 
+    // Map frontend file names to database document types
+    const documentTypeMapping = {
+      'photo': 'photo',
+      'birthCert': 'birth_cert',
+      'wassce': 'wassce',
+      'nmcPin': 'nmc_pin',
+      'recommendation': 'recommendation'
+    };
+
     for (const [docType, file] of Object.entries(files)) {
+      const dbDocType = documentTypeMapping[docType] || docType;
       await pool.query(
         `INSERT INTO documents (application_id, document_type, document_name, file_path, file_size, mime_type)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [appResult.rows[0].id, docType, file.originalname, file.path, file.size, file.mimetype]
+        [appResult.rows[0].id, dbDocType, file.originalname, file.path, file.size, file.mimetype]
       );
     }
 

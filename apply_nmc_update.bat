@@ -1,0 +1,1 @@
+@echo off\necho Applying NMC Pin database updates...\n\n\"C:\\Program Files\\PostgreSQL\\15\\bin\\psql.exe\" -h localhost -p 5432 -U postgres -d wuc_admissions -f database\\update_medical_to_nmc.sql\n\nif %ERRORLEVEL% EQU 0 (\n    echo Database updated successfully!\n) else (\n    echo Error updating database. Please check PostgreSQL installation.\n)\n\npause

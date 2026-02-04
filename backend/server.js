@@ -2,11 +2,14 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const https = require('https');
+const fs = require('fs');
 const path = require('path');
 const { pool } = require('./config/database');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 443;
 
 app.use(helmet());
 app.use(cors());
@@ -42,17 +45,36 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-
-
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
+// Start HTTP server
 app.listen(PORT, () => {
-  console.log(`🚀 WUC Admission Portal API running on port ${PORT}`);
+  console.log(`🚀 WUC Admission Portal API (HTTP) running on port ${PORT}`);
+});
+
+// Start HTTPS server if SSL is enabled
+if (process.env.SSL_ENABLED === 'true') {
+  try {
+    const sslOptions = {
+      key: fs.readFileSync(process.env.SSL_KEY_PATH),
+      cert: fs.readFileSync(process.env.SSL_CERT_PATH)
+    };
+    
+    https.createServer(sslOptions, app).listen(HTTPS_PORT, () => {
+      console.log(`🔒 WUC Admission Portal API (HTTPS) running on port ${HTTPS_PORT}`);
+      console.log(`🌐 Reference: https://www.wuc.edu.gh`);
+      console.log(`✅ Health: https://localhost:${HTTPS_PORT}/api/health`);
+    });
+  } catch (error) {
+    console.error('❌ SSL Error:', error.message);
+    console.log('💡 Run generate-ssl.bat to create SSL certificates');
+  }
+} else {
   console.log(`🌐 Reference: https://www.wuc.edu.gh`);
   console.log(`✅ Health: http://localhost:${PORT}/api/health`);
-});
+}
 
 module.exports = app;

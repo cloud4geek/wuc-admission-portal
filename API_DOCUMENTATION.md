@@ -154,7 +154,7 @@ Upload required documents (multipart/form-data).
 - `photo`: Passport photo (JPG/PNG, max 2MB)
 - `birthCert`: Birth certificate (PDF, max 5MB)
 - `wassce`: WASSCE certificate (PDF, max 5MB)
-- `medicalCert`: Medical certificate (PDF, max 5MB)
+- `nmcPin`: NMC Pin for top-up applicants (PDF, max 5MB, optional)
 - `recommendation`: Recommendation letter (PDF, max 5MB, optional)
 
 **Response:**

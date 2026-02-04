@@ -6,8 +6,9 @@ const pool = new Pool({
   database: process.env.DB_NAME || 'wuc_admissions',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD,
-  max: 20,
-  idleTimeoutMillis: 30000,
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  max: parseInt(process.env.DB_MAX_CONNECTIONS) || 20,
+  idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT) || 30000,
   connectionTimeoutMillis: 2000,
 });
 

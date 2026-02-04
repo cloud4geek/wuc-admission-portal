@@ -9,7 +9,7 @@ const ApplicationForm: React.FC = () => {
     previousSchool: '', yearCompleted: '', guardianName: '', guardianPhone: '', guardianEmail: ''
   });
   const [files, setFiles] = useState<{ [key: string]: File | null }>({
-    photo: null, birthCert: null, wassce: null, medicalCert: null, recommendation: null
+    photo: null, birthCert: null, wassce: null, nmcPin: null, recommendation: null
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -143,7 +143,7 @@ const ApplicationForm: React.FC = () => {
                 <div className="form-group"><label>Passport Photo * (Max 2MB, JPG/PNG)</label><input type="file" name="photo" onChange={handleFileChange} accept="image/*" required /></div>
                 <div className="form-group"><label>Birth Certificate / National ID * (Max 5MB, PDF)</label><input type="file" name="birthCert" onChange={handleFileChange} accept=".pdf" required /></div>
                 <div className="form-group"><label>WASSCE/SSSCE Certificate * (Max 5MB, PDF)</label><input type="file" name="wassce" onChange={handleFileChange} accept=".pdf" required /></div>
-                <div className="form-group"><label>Medical Certificate * (Max 5MB, PDF)</label><input type="file" name="medicalCert" onChange={handleFileChange} accept=".pdf" required /></div>
+                <div className="form-group"><label>NMC Pin (Top-up applicants - Optional) (Max 5MB, PDF)</label><input type="file" name="nmcPin" onChange={handleFileChange} accept=".pdf" /></div>
                 <div className="form-group"><label>Recommendation Letter (Optional, Max 5MB, PDF)</label><input type="file" name="recommendation" onChange={handleFileChange} accept=".pdf" /></div>
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
                   <button type="button" onClick={() => setStep(3)} className="btn" style={{ background: '#6b7280', color: 'white' }}>Previous</button>

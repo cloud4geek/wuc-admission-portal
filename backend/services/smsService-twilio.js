@@ -1,33 +1,19 @@
-const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+const twilio = require('twilio');
 
-const snsClient = new SNSClient({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-  }
-});
+const client = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
 
 const sendSMS = async (phone, message) => {
   try {
-    const command = new PublishCommand({
-      PhoneNumber: phone,
-      Message: message,
-      MessageAttributes: {
-        'AWS.SNS.SMS.SenderID': {
-          DataType: 'String',
-          StringValue: 'WUC-ADM'
-        },
-        'AWS.SNS.SMS.SMSType': {
-          DataType: 'String',
-          StringValue: 'Transactional'
-        }
-      }
+    const result = await client.messages.create({
+      body: message,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: phone
     });
-
-    const result = await snsClient.send(command);
     console.log(`✅ SMS sent to ${phone}`);
-    return { success: true, messageId: result.MessageId };
+    return { success: true, messageId: result.sid };
   } catch (error) {
     console.error('❌ SMS error:', error.message);
     return { success: false, error: error.message };
