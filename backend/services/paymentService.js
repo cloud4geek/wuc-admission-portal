@@ -24,7 +24,7 @@ const initiatePayment = async (paymentData) => {
   try {
     const payload = {
       tx_ref: `WUC-${Date.now()}`,
-      amount: amount || 200,
+      amount: amount || 220,
       currency: 'GHS',
       redirect_url: `${process.env.APP_URL}/payment/callback`,
       customer: { email, phonenumber: phone, name: `${firstName} ${lastName}` },

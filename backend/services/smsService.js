@@ -9,6 +9,12 @@ const snsClient = new SNSClient({
 });
 
 const sendSMS = async (phone, message) => {
+  // Dev mode — log to console instead of sending via SNS
+  if (process.env.NODE_ENV === 'development' || process.env.AWS_ACCESS_KEY_ID === 'REPLACE_WITH_NEW_KEY') {
+    console.log(`📱 [DEV SMS] To: ${phone} — ${message}`);
+    return { success: true, messageId: `DEV-SMS-${Date.now()}` };
+  }
+
   try {
     const command = new PublishCommand({
       PhoneNumber: phone,

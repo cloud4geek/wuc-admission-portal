@@ -43,6 +43,16 @@ const emailTemplate = (content) => `
 `;
 
 const sendEmail = async (to, subject, html) => {
+  // Dev mode — log to console instead of sending via SES
+  if (process.env.NODE_ENV === 'development' || process.env.AWS_ACCESS_KEY_ID === 'REPLACE_WITH_NEW_KEY') {
+    console.log('\n' + '='.repeat(60));
+    console.log(`📧 [DEV EMAIL] To: ${to}`);
+    console.log(`   Subject: ${subject}`);
+    console.log(`   Body preview: ${html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)}...`);
+    console.log('='.repeat(60) + '\n');
+    return { success: true, messageId: `DEV-${Date.now()}` };
+  }
+
   try {
     console.log(`📧 Sending email to ${to} via AWS SES...`);
     
@@ -86,25 +96,30 @@ const sendVoucherEmail = async (email, voucherCode, firstName) => {
   return sendEmail(email, 'WUC Application Voucher - ' + voucherCode, emailTemplate(content));
 };
 
-const sendApplicationConfirmation = async (email, applicationId, firstName) => {
+const sendApplicationConfirmation = async (email, applicationId, firstName, applicationType = 'regular') => {
+  const isTopUp = applicationType === 'topup';
+  const typeLabel = isTopUp ? 'Top-Up / Access Programme' : 'Undergraduate';
+  const applyLink = isTopUp ? '/apply-topup' : '/apply';
+
   const content = `
     <h2>Application Received Successfully</h2>
     <p>Dear ${firstName},</p>
-    <p>We are pleased to confirm that your application to Withrow University College has been received and is now under review.</p>
+    <p>We are pleased to confirm that your <strong>${typeLabel}</strong> application to Withrow University College
+       has been received and is now under review.</p>
     <div class="voucher-code">${applicationId}</div>
     <p><strong>What happens next?</strong></p>
     <ul>
-      <li>Our admissions team will review your application</li>
-      <li>You will receive updates via email</li>
-      <li>You can track your application status online</li>
+      <li>Our admissions team will review your application and supporting documents</li>
+      <li>You will receive an email notification once a decision is made</li>
+      <li>You can track your application status online at any time</li>
     </ul>
     <p style="text-align: center;">
-      <a href="${process.env.APP_URL}/application-status" class="button">Check Application Status</a>
+      <a href="${process.env.APP_URL}/application-status" class="button">Track Application Status</a>
     </p>
-    <p>Please save your Application ID for future reference.</p>
-    <p>Best regards,<br><strong>WUC Admissions Team</strong></p>
+    <p>Please save your Application ID: <strong>${applicationId}</strong> for future reference.</p>
+    <p>Best regards,<br><strong>WUC Admissions Office</strong><br>Withrow University College, Agona-Asamangah</p>
   `;
-  return sendEmail(email, 'Application Confirmation - ' + applicationId, emailTemplate(content));
+  return sendEmail(email, `Application Confirmation [${applicationId}] — WUC`, emailTemplate(content));
 };
 
 const sendAdmissionLetter = async (email, firstName, admissionLetterUrl) => {
@@ -129,4 +144,18 @@ const sendAdmissionLetter = async (email, firstName, admissionLetterUrl) => {
   return sendEmail(email, '🎉 Admission Approved - Welcome to WUC!', emailTemplate(content));
 };
 
-module.exports = { sendEmail, sendVoucherEmail, sendApplicationConfirmation, sendAdmissionLetter };
+const sendPasswordResetEmail = async (email, username, resetUrl) => {
+  const content = `
+    <h2>Password Reset Request</h2>
+    <p>Dear ${username},</p>
+    <p>We received a request to reset your admin account password. Click the button below to set a new password.</p>
+    <p style="text-align: center;">
+      <a href="${resetUrl}" class="button">Reset Password</a>
+    </p>
+    <p>This link expires in <strong>1 hour</strong>. If you did not request a password reset, you can safely ignore this email.</p>
+    <p>Best regards,<br><strong>WUC System</strong></p>
+  `;
+  return sendEmail(email, 'Admin Password Reset - WUC Portal', emailTemplate(content));
+};
+
+module.exports = { sendEmail, emailTemplate, sendVoucherEmail, sendApplicationConfirmation, sendAdmissionLetter, sendPasswordResetEmail };

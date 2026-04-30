@@ -1,18 +1,30 @@
 const { pool } = require('../config/database');
-const { initiatePayment, verifyPayment } = require('../services/paymentService');
+const { initiatePayment } = require('../services/paymentService');
 const { sendVoucherEmail } = require('../services/emailService');
 const { sendVoucherSMS } = require('../services/smsService');
+const logger = require('../utils/logger');
 
-const generateVoucherCode = () => {
-  return `WUC${Date.now().toString().slice(-8)}`;
+const generateVoucherCode = () => `WUC${Date.now().toString().slice(-8)}`;
+
+/**
+ * Notify user of voucher via email and SMS.
+ * Failures are isolated — they log but never crash the purchase flow.
+ */
+const notifyVoucher = (email, phone, voucherCode, firstName) => {
+  sendVoucherEmail(email, voucherCode, firstName).catch((e) =>
+    logger.error('Voucher email failed', { email, voucherCode, error: e.message })
+  );
+  sendVoucherSMS(phone, voucherCode).catch((e) =>
+    logger.error('Voucher SMS failed', { phone, voucherCode, error: e.message })
+  );
 };
 
-const purchaseVoucher = async (req, res) => {
+const purchaseVoucher = async (req, res, next) => {
   const { firstName, lastName, email, phone, paymentMethod } = req.body;
 
   try {
     const paymentResult = await initiatePayment({
-      email, phone, amount: 200, paymentMethod, firstName, lastName
+      email, phone, amount: 220, paymentMethod, firstName, lastName,
     });
 
     if (!paymentResult.success) {
@@ -22,28 +34,27 @@ const purchaseVoucher = async (req, res) => {
     const voucherCode = generateVoucherCode();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-    const result = await pool.query(
-      `INSERT INTO vouchers (voucher_code, first_name, last_name, email, phone, payment_method, amount, expires_at) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [voucherCode, firstName, lastName, email, phone, paymentMethod, 200, expiresAt]
+    await pool.query(
+      `INSERT INTO vouchers (voucher_code, first_name, last_name, email, phone, payment_method, amount, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [voucherCode, firstName, lastName, email, phone, paymentMethod, 220, expiresAt]
     );
 
-    await sendVoucherEmail(email, voucherCode, firstName);
-    await sendVoucherSMS(phone, voucherCode);
+    // Fire-and-forget — payment is done, don't block response on notifications
+    notifyVoucher(email, phone, voucherCode, firstName);
 
     res.json({
       success: true,
       voucherCode,
       message: 'Voucher purchased successfully',
-      paymentUrl: paymentResult.data?.data?.link
+      paymentUrl: paymentResult.data?.data?.link,
     });
   } catch (error) {
-    console.error('Purchase error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    next(error);
   }
 };
 
-const verifyVoucher = async (req, res) => {
+const verifyVoucher = async (req, res, next) => {
   const { voucherCode } = req.body;
 
   try {
@@ -68,12 +79,11 @@ const verifyVoucher = async (req, res) => {
 
     res.json({ success: true, voucher });
   } catch (error) {
-    console.error('Verify error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    next(error);
   }
 };
 
-const resendVoucher = async (req, res) => {
+const resendVoucher = async (req, res, next) => {
   const { voucherId } = req.body;
 
   try {
@@ -84,14 +94,60 @@ const resendVoucher = async (req, res) => {
     }
 
     const voucher = result.rows[0];
-    await sendVoucherEmail(voucher.email, voucher.voucher_code, voucher.first_name);
-    await sendVoucherSMS(voucher.phone, voucher.voucher_code);
+    notifyVoucher(voucher.email, voucher.phone, voucher.voucher_code, voucher.first_name);
 
     res.json({ success: true, message: 'Voucher resent successfully' });
   } catch (error) {
-    console.error('Resend error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    next(error);
   }
 };
 
-module.exports = { purchaseVoucher, verifyVoucher, resendVoucher };
+/**
+ * Recover lost voucher — applicant provides email + phone used during purchase.
+ * If both match, the voucher code is resent via email and SMS.
+ */
+const recoverVoucher = async (req, res, next) => {
+  const { email, phone } = req.body;
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM vouchers
+       WHERE LOWER(email) = LOWER($1) AND phone = $2
+       ORDER BY created_at DESC`,
+      [email.trim(), phone.trim()]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No voucher found matching that email and phone number. Please check your details and try again.',
+      });
+    }
+
+    // Return all vouchers for this email+phone combo
+    const vouchers = result.rows.map(v => ({
+      voucherCode: v.voucher_code,
+      status: v.status,
+      purchasedAt: v.created_at,
+      expiresAt: v.expires_at,
+    }));
+
+    // Resend the most recent unused voucher via email/SMS
+    const activeVoucher = result.rows.find(v => v.status === 'unused' && new Date(v.expires_at) > new Date());
+    if (activeVoucher) {
+      notifyVoucher(activeVoucher.email, activeVoucher.phone, activeVoucher.voucher_code, activeVoucher.first_name);
+    }
+
+    res.json({
+      success: true,
+      message: activeVoucher
+        ? `Voucher found! The code has been resent to ${email} and ${phone}.`
+        : 'Voucher(s) found but none are currently active (used or expired).',
+      vouchers,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { purchaseVoucher, verifyVoucher, resendVoucher, recoverVoucher };

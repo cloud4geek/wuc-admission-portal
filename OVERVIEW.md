@@ -89,7 +89,7 @@ wuc-admission-portal/
 │   │   │   ├── ApplicationStatus.tsx       # Track status
 │   │   │   └── AdminDashboard.tsx          # Admin panel
 │   │   ├── App.tsx                         # Main router
-│   │   ├── App.css                         # Styles
+01│   │   ├── App.css                         # Styles
 │   │   └── react-app-env.d.ts             # TypeScript types
 │   └── package.json
 │

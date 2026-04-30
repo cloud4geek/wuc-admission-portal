@@ -1,6 +1,43 @@
+# Environment files — NEVER commit secrets
 .env
 .env.local
 .env.*.local
-.env
-.env.local
-.env.*.local
+.env.development
+.env.production
+env.development
+
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# Uploads
+uploads/documents/*
+uploads/photos/*
+!uploads/documents/.gitkeep
+!uploads/photos/.gitkeep
+
+# SSL Certificates
+ssl/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Database scripts with credentials
+reset-postgres-password.bat
+find-password.js
+test-db-connection.js
+create-new-user.sql
+reset-wuc-admin.sql
+
+# Test files
+test-*.js
+test-*.pdf
+
+# OS
+.DS_Store
+Thumbs.db

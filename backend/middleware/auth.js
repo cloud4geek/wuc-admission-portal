@@ -1,46 +1,37 @@
 const jwtUtil = require('../utils/jwt');
+const logger = require('../utils/logger');
+
+const extractToken = (req) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  return authHeader.split(' ')[1];
+};
 
 const authenticate = (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ 
-        error: 'Access denied. No token provided.' 
-      });
+    const token = extractToken(req);
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Access denied. No token provided.' });
     }
-
-    const token = authHeader.split(' ')[1];
-    const decoded = jwtUtil.verifyToken(token);
-    
-    req.user = decoded;
+    req.user = jwtUtil.verifyToken(token);
     next();
   } catch (error) {
-    return res.status(403).json({ 
-      error: 'Invalid or expired token' 
-    });
+    logger.warn('Invalid token attempt', { ip: req.ip, error: error.message });
+    return res.status(403).json({ success: false, error: 'Invalid or expired token' });
   }
 };
 
 const authenticateAdmin = (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ 
-        error: 'Access denied. No token provided.' 
-      });
+    const token = extractToken(req);
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Access denied. No token provided.' });
     }
-
-    const token = authHeader.split(' ')[1];
-    const decoded = jwtUtil.verifyAdminToken(token);
-    
-    req.admin = decoded;
+    req.admin = jwtUtil.verifyAdminToken(token);
     next();
   } catch (error) {
-    return res.status(403).json({ 
-      error: 'Invalid or expired admin token' 
-    });
+    logger.warn('Invalid admin token attempt', { ip: req.ip, error: error.message });
+    return res.status(403).json({ success: false, error: 'Invalid or expired admin token' });
   }
 };
 

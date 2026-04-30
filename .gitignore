@@ -1,10 +1,44 @@
 node_modules/
 .env
 .env.*
-backend/.env.development
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/env.development
 deployment/.env.production
+
 # SSL Certificates
 ssl/
 *.pem
 *.key
 *.crt
+*.p12
+*.pfx
+
+# Uploads
+backend/uploads/
+
+# Database scripts
+backend/reset-postgres-password.bat
+backend/find-password.js
+backend/test-db-connection.js
+backend/create-new-user.sql
+backend/reset-wuc-admin.sql
+
+# Test files
+backend/test-*.js
+backend/test-*.pdf
+
+# IDE
+.vscode/
+.idea/
+.claude/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

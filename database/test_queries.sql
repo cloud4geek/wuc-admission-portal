@@ -54,7 +54,7 @@ SELECT pg_size_pretty(pg_database_size('wuc_admissions')) as database_size;
 
 -- 8. Test insert voucher (optional)
 INSERT INTO vouchers (voucher_code, first_name, last_name, email, phone, payment_method, amount, expires_at)
-VALUES ('WUC99999999', 'Test', 'User', 'test@example.com', '+233241234567', 'mtn', 200.00, NOW() + INTERVAL '30 days')
+VALUES ('WUC99999999', 'Test', 'User', 'test@example.com', '+233241234567', 'mtn', 220.00, NOW() + INTERVAL '30 days')
 RETURNING *;
 
 -- 9. Delete test voucher (cleanup)
