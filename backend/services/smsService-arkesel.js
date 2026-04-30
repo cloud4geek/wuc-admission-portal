@@ -1,10 +1,10 @@
 const axios = require('axios');
 
-const ARKESEL_API_URL = 'https://sms.arkesel.com/api/v2/sms/send';
+const ARKESEL_API_URL = 'https://sms.arkesel.com/sms/api';
 
 /**
  * Send SMS via Arkesel API
- * Docs: https://developers.arkesel.com/sms-api/send-sms
+ * API Format: https://sms.arkesel.com/sms/api?action=send-sms&api_key=KEY&to=PHONE&from=SENDER&sms=MESSAGE
  */
 const sendSMS = async (phone, message) => {
   // Dev mode — log to console instead of sending real SMS
@@ -15,40 +15,49 @@ const sendSMS = async (phone, message) => {
   }
 
   try {
-    // Format phone number for Ghana (remove + and spaces)
-    const formattedPhone = phone.replace(/[\s+]/g, '');
+    // Format phone number (remove spaces, keep + or add 233 prefix)
+    let formattedPhone = phone.replace(/\s/g, '');
+    
+    // If starts with 0, replace with 233
+    if (formattedPhone.startsWith('0')) {
+      formattedPhone = '233' + formattedPhone.substring(1);
+    }
+    // Remove + if present
+    formattedPhone = formattedPhone.replace('+', '');
 
-    const response = await axios.post(
-      ARKESEL_API_URL,
-      {
-        sender: process.env.SMS_SENDER_ID || 'WUC-ADM',
-        message: message,
-        recipients: [formattedPhone]
+    const response = await axios.get(ARKESEL_API_URL, {
+      params: {
+        action: 'send-sms',
+        api_key: process.env.ARKESEL_API_KEY,
+        to: formattedPhone,
+        from: process.env.SMS_SENDER_ID || 'WUC-ADM',
+        sms: message
       },
-      {
-        headers: {
-          'api-key': process.env.ARKESEL_API_KEY,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+      timeout: 10000
+    });
 
-    if (response.data.code === '200' || response.data.code === 200) {
+    // Arkesel returns different response formats
+    const responseData = response.data;
+    
+    // Check for success (response can be string or object)
+    if (responseData.code === '200' || 
+        responseData.code === 200 || 
+        (typeof responseData === 'string' && responseData.includes('successfully'))) {
       console.log(`✅ SMS sent to ${phone} via Arkesel`);
       return { 
         success: true, 
-        messageId: response.data.data?.id || `ARKESEL-${Date.now()}`,
-        response: response.data
+        messageId: responseData.message_id || `ARKESEL-${Date.now()}`,
+        response: responseData
       };
     } else {
-      console.error('❌ Arkesel SMS error:', response.data.message);
-      return { success: false, error: response.data.message };
+      console.error('❌ Arkesel SMS error:', responseData);
+      return { success: false, error: responseData.message || 'SMS sending failed' };
     }
   } catch (error) {
     console.error('❌ SMS error:', error.response?.data || error.message);
     return { 
       success: false, 
-      error: error.response?.data?.message || error.message 
+      error: error.response?.data || error.message 
     };
   }
 };
