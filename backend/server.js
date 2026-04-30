@@ -74,6 +74,7 @@ const authRoutes = require('./routes/auth');
 const voucherRoutes = require('./routes/vouchers');
 const applicationRoutes = require('./routes/applications');
 const adminRoutes = require('./routes/admin');
+const webhookRoutes = require('./routes/webhooks');
 
 app.use('/api/auth/admin/login', loginLimiter);
 app.use('/api/vouchers/purchase', purchaseLimiter);
@@ -83,6 +84,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/vouchers', voucherRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'WUC Admission Portal API', version: '2.0.0', status: 'running' });
