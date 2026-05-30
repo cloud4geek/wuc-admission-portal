@@ -1,5 +1,5 @@
 const { pool } = require('../config/database');
-const { initiatePayment } = require('../services/paymentService');
+const { initiatePayment, verifyPayment } = require('../services/paymentService');
 const { sendVoucherEmail } = require('../services/emailService');
 const { sendVoucherSMS } = require('../services/smsService');
 const logger = require('../utils/logger');
@@ -20,34 +20,54 @@ const notifyVoucher = (email, phone, voucherCode, firstName) => {
 };
 
 const purchaseVoucher = async (req, res, next) => {
-  const { firstName, lastName, email, phone, paymentMethod } = req.body;
+  const { firstName, lastName, email, phone, paymentMethod, reference } = req.body;
 
   try {
-    const paymentResult = await initiatePayment({
-      email, phone, amount: 220, paymentMethod, firstName, lastName,
-    });
+    // If a Paystack reference is provided, verify the payment first
+    if (reference) {
+      const verification = await verifyPayment(reference);
+      if (!verification.success) {
+        return res.status(400).json({ success: false, message: 'Payment verification failed. Please try again.' });
+      }
+    } else {
+      // No reference — initialize payment (returns URL for redirect or dev-mode success)
+      const paymentResult = await initiatePayment({
+        email, phone, amount: 220, paymentMethod, firstName, lastName,
+      });
 
-    if (!paymentResult.success) {
-      return res.status(400).json({ success: false, message: 'Payment initiation failed' });
+      if (!paymentResult.success) {
+        return res.status(400).json({ success: false, message: 'Payment initiation failed: ' + (paymentResult.error || '') });
+      }
+
+      // If there's an authorization_url, return it for frontend redirect
+      if (paymentResult.data.authorization_url) {
+        return res.json({
+          success: true,
+          requiresRedirect: true,
+          paymentUrl: paymentResult.data.authorization_url,
+          reference: paymentResult.data.reference,
+          message: 'Redirect to payment page',
+        });
+      }
+      // Dev mode — no redirect needed, fall through to create voucher
     }
 
+    // Payment verified or dev mode — create the voucher
     const voucherCode = generateVoucherCode();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
     await pool.query(
-      `INSERT INTO vouchers (voucher_code, first_name, last_name, email, phone, payment_method, amount, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [voucherCode, firstName, lastName, email, phone, paymentMethod, 220, expiresAt]
+      `INSERT INTO vouchers (voucher_code, first_name, last_name, email, phone, payment_method, payment_reference, amount, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [voucherCode, firstName, lastName, email, phone, paymentMethod, reference || `DEV-${Date.now()}`, 220, expiresAt]
     );
 
-    // Fire-and-forget — payment is done, don't block response on notifications
     notifyVoucher(email, phone, voucherCode, firstName);
 
     res.json({
       success: true,
       voucherCode,
       message: 'Voucher purchased successfully',
-      paymentUrl: paymentResult.data?.data?.link,
     });
   } catch (error) {
     next(error);

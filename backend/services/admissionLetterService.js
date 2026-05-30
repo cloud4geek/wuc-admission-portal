@@ -463,7 +463,8 @@ async function generateWithImageBackground(app, choices, fees, photoPath, bg, re
 }
 
 /* ══════════════════════════════════════════════════════════
-   Generator: Built-in header (no template)
+   Generator: Built-in header (no te
+   mplate)
    ══════════════════════════════════════════════════════════ */
 async function generateFromCode(app, choices, fees, photoPath, registrar) {
   const appId = app.application_id;

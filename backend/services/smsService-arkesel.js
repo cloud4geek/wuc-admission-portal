@@ -7,10 +7,10 @@ const ARKESEL_API_URL = 'https://sms.arkesel.com/sms/api';
  * API Format: https://sms.arkesel.com/sms/api?action=send-sms&api_key=KEY&to=PHONE&from=SENDER&sms=MESSAGE
  */
 const sendSMS = async (phone, message) => {
-  // Dev mode — log to console instead of sending real SMS
-  if (process.env.NODE_ENV === 'development' || !process.env.ARKESEL_API_KEY || process.env.ARKESEL_API_KEY === 'your_arkesel_api_key') {
-    console.log(`📱 [DEV SMS] To: ${phone}`);
-    console.log(`📱 [DEV SMS] Message: ${message}`);
+  // Check if API key is configured
+  if (!process.env.ARKESEL_API_KEY || process.env.ARKESEL_API_KEY === 'your_arkesel_api_key') {
+    console.log(`📱 [DEV SMS - No API Key] To: ${phone}`);
+    console.log(`📱 [DEV SMS - No API Key] Message: ${message}`);
     return { success: true, messageId: `DEV-SMS-${Date.now()}` };
   }
 
@@ -42,6 +42,8 @@ const sendSMS = async (phone, message) => {
     // Check for success (response can be string or object)
     if (responseData.code === '200' || 
         responseData.code === 200 || 
+        responseData.code === 'ok' ||
+        responseData.message === 'Successfully Sent' ||
         (typeof responseData === 'string' && responseData.includes('successfully'))) {
       console.log(`✅ SMS sent to ${phone} via Arkesel`);
       return { 

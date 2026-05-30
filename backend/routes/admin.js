@@ -53,8 +53,14 @@ router.post('/documents/:documentId/verify', verifyDocument);
 router.get('/vouchers', getAllVouchers);
 router.post('/vouchers/:voucherId/cancel', cancelVoucher);
 
-/* Export */
-router.get('/export/applications', exportApplications);
+/* Export — accepts token from query param for window.open downloads */
+router.get('/export/applications', (req, res, next) => {
+  // Allow token from query param as fallback for window.open
+  if (!req.headers.authorization && req.query.token) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  next();
+}, exportApplications);
 
 /* Audit logs — super_admin only */
 const superAdminOnly = (req, res, next) => {

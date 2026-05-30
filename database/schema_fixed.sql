@@ -1,10 +1,24 @@
 -- ============================================================
--- WUC Admission Portal — Full Database Schema v2
--- Withrow University College, Agona-Asamangah
--- Supports: Regular (WASSCE/Mature) + Top-Up (Diploma/HND) applicants
+-- WUC Admission Portal — Fixed Database Schema
+-- Withrow University College, Agona-Asamang
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ── Admin users (MUST BE FIRST - referenced by applications) ──
+CREATE TABLE IF NOT EXISTS admin_users (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    username            VARCHAR(100) UNIQUE NOT NULL,
+    email               VARCHAR(255) UNIQUE NOT NULL,
+    password_hash       TEXT NOT NULL,
+    role                VARCHAR(50) DEFAULT 'admin' CHECK (role IN ('admin','super_admin')),
+    is_active           BOOLEAN DEFAULT true,
+    last_login          TIMESTAMP,
+    reset_token         TEXT,
+    reset_token_expires TIMESTAMP,
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 -- ── Vouchers ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS vouchers (
@@ -29,15 +43,10 @@ CREATE TABLE IF NOT EXISTS applications (
     id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     application_id   VARCHAR(20) UNIQUE NOT NULL,
     voucher_id       UUID REFERENCES vouchers(id),
-
-    -- Form type
-    application_type VARCHAR(10) NOT NULL DEFAULT 'regular'
-                     CHECK (application_type IN ('regular','topup')),
-
-    -- Personal particulars
+    application_type VARCHAR(10) NOT NULL DEFAULT 'regular' CHECK (application_type IN ('regular','topup')),
     title            VARCHAR(10),
     first_name       VARCHAR(100) NOT NULL,
-    last_name        VARCHAR(100) NOT NULL,   -- surname
+    last_name        VARCHAR(100) NOT NULL,
     other_names      VARCHAR(100),
     date_of_birth    DATE NOT NULL,
     gender           VARCHAR(10) NOT NULL,
@@ -47,33 +56,22 @@ CREATE TABLE IF NOT EXISTS applications (
     email            VARCHAR(255) NOT NULL,
     phone            VARCHAR(20) NOT NULL,
     physical_challenge TEXT,
-
-    -- Enrollment & financing
     enrollment_option VARCHAR(20) CHECK (enrollment_option IN ('Regular','Weekend','Sandwich')),
     financing         JSONB DEFAULT '[]',
-
-    -- Candidate type (regular form only)
-    candidate_type   VARCHAR(10) DEFAULT 'wassce'
-                     CHECK (candidate_type IN ('wassce','mature')),
-
-    -- Top-up: employment summary
+    candidate_type   VARCHAR(10) DEFAULT 'wassce' CHECK (candidate_type IN ('wassce','mature')),
     total_years_worked INTEGER,
-
-    -- Status & review
-    status           VARCHAR(20) DEFAULT 'pending'
-                     CHECK (status IN ('pending','approved','rejected')),
+    status           VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
     submitted_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     reviewed_at      TIMESTAMP,
     reviewed_by      UUID REFERENCES admin_users(id),
     admission_letter_url TEXT,
     rejection_reason TEXT,
     admin_notes      TEXT,
-
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- ── Programme choices (up to 3 per application) ──────────────
+-- ── Programme choices ────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS programme_choices (
     id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
@@ -96,7 +94,7 @@ CREATE TABLE IF NOT EXISTS institutions_attended (
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- ── Academic grades (WASSCE/SSCE core & elective) ────────────
+-- ── Academic grades ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS academic_grades (
     id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
@@ -109,7 +107,7 @@ CREATE TABLE IF NOT EXISTS academic_grades (
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- ── Diploma / HND qualifications (top-up applicants) ─────────
+-- ── Diploma qualifications ───────────────────────────────────
 CREATE TABLE IF NOT EXISTS diploma_qualifications (
     id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
@@ -121,7 +119,7 @@ CREATE TABLE IF NOT EXISTS diploma_qualifications (
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- ── Employment history (top-up applicants) ───────────────────
+-- ── Employment history ───────────────────────────────────────
 CREATE TABLE IF NOT EXISTS employment_history (
     id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
@@ -134,8 +132,6 @@ CREATE TABLE IF NOT EXISTS employment_history (
 );
 
 -- ── Documents ────────────────────────────────────────────────
--- document_type values: photo, birth_cert, certificates,
---   transcripts, wassce, nmc_pin, recommendation
 CREATE TABLE IF NOT EXISTS documents (
     id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     application_id UUID REFERENCES applications(id) ON DELETE CASCADE,
@@ -148,21 +144,6 @@ CREATE TABLE IF NOT EXISTS documents (
     verified_at    TIMESTAMP,
     verified_by    UUID,
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- ── Admin users ──────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS admin_users (
-    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    username            VARCHAR(100) UNIQUE NOT NULL,
-    email               VARCHAR(255) UNIQUE NOT NULL,
-    password_hash       TEXT NOT NULL,
-    role                VARCHAR(50) DEFAULT 'admin' CHECK (role IN ('admin','super_admin')),
-    is_active           BOOLEAN DEFAULT true,
-    last_login          TIMESTAMP,
-    reset_token         TEXT,
-    reset_token_expires TIMESTAMP,
-    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ── Payments ─────────────────────────────────────────────────
@@ -222,7 +203,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_app        ON documents(application_id)
 CREATE INDEX IF NOT EXISTS idx_payments_ref         ON payments(payment_reference);
 CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status);
 
--- ── updated_at trigger ───────────────────────────────────────
+-- ── Triggers ─────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -231,28 +212,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DO $$ BEGIN
-  CREATE TRIGGER update_vouchers_updated_at
+CREATE TRIGGER update_vouchers_updated_at
     BEFORE UPDATE ON vouchers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-DO $$ BEGIN
-  CREATE TRIGGER update_applications_updated_at
+CREATE TRIGGER update_applications_updated_at
     BEFORE UPDATE ON applications FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-DO $$ BEGIN
-  CREATE TRIGGER update_payments_updated_at
+CREATE TRIGGER update_payments_updated_at
     BEFORE UPDATE ON payments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-DO $$ BEGIN
-  CREATE TRIGGER update_admin_users_updated_at
+CREATE TRIGGER update_admin_users_updated_at
     BEFORE UPDATE ON admin_users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ── Default admin (password: Admin@WUC2025) ──────────────────
--- Hash generated with bcrypt rounds=10
 INSERT INTO admin_users (username, email, password_hash, role)
 VALUES ('admin', 'admin@wuc.edu.gh',
         '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lh3y',

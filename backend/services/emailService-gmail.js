@@ -36,8 +36,8 @@ const emailTemplate = (content) => `
 const createTransporter = () => {
   return nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
+    port: 587,
+    secure: false,
     auth: {
       user: process.env.GMAIL_USER,
       pass: process.env.GMAIL_APP_PASSWORD
@@ -56,24 +56,20 @@ const sendEmail = async (to, subject, html) => {
   }
 
   try {
-    console.log(`📧 Sending email to ${to} via Gmail (port 465)...`);
+    console.log(`📧 Sending email to ${to} via Gmail...`);
     
     const transporter = createTransporter();
-    
-    const mailOptions = {
+    const info = await transporter.sendMail({
       from: `"WUC Admissions" <${process.env.GMAIL_USER}>`,
       to,
       subject,
       html
-    };
-    
-    const info = await transporter.sendMail(mailOptions);
+    });
 
     console.log(`✅ Email sent successfully - ID: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
     console.error(`❌ Email failed:`, error.message);
-    console.error('Full error:', error);
     return { success: false, error: error.message };
   }
 };

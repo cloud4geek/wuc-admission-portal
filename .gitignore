@@ -15,20 +15,41 @@ ssl/
 *.crt
 *.p12
 *.pfx
+backend/ssl/
 
-# Uploads
+# Uploads (user data — never commit)
 backend/uploads/
 
-# Database scripts
+# Node modules (both frontend and backend)
+backend/node_modules/
+frontend/node_modules/
+
+# Password reset scripts (contain plaintext passwords)
+backend/reset-*-pw.js
+backend/reset-admin-pw.js
+backend/reset-other-pw.js
+
+# Database scripts with credentials
 backend/reset-postgres-password.bat
 backend/find-password.js
 backend/test-db-connection.js
 backend/create-new-user.sql
 backend/reset-wuc-admin.sql
+backend/check-suppression.js
+backend/diagnose-email.js
+backend/generate-wuc-secrets.js
 
 # Test files
 backend/test-*.js
 backend/test-*.pdf
+
+# Deployment scripts
+auto-deploy.bat
+apply_nmc_update.bat
+
+# Build output
+frontend/build/
+dist/
 
 # IDE
 .vscode/
@@ -38,7 +59,12 @@ backend/test-*.pdf
 # Logs
 *.log
 logs/
+backend/logs/*.log
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Lock files (optional — uncomment if you don't want them in repo)
+# package-lock.json
+# frontend/package-lock.json

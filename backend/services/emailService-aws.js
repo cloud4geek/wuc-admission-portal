@@ -1,4 +1,13 @@
-const nodemailer = require('nodemailer');
+const AWS = require('aws-sdk');
+
+// Configure AWS SES
+AWS.config.update({
+  region: process.env.AWS_SES_REGION || process.env.AWS_REGION,
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+});
+
+const ses = new AWS.SES();
 
 const emailTemplate = (content) => `
 <!DOCTYPE html>
@@ -33,20 +42,9 @@ const emailTemplate = (content) => `
 </html>
 `;
 
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD
-    }
-  });
-};
-
 const sendEmail = async (to, subject, html) => {
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+  // Dev mode — log to console instead of sending via SES
+  if (process.env.NODE_ENV === 'development' || process.env.AWS_ACCESS_KEY_ID === 'REPLACE_WITH_NEW_KEY') {
     console.log('\n' + '='.repeat(60));
     console.log(`📧 [DEV EMAIL] To: ${to}`);
     console.log(`   Subject: ${subject}`);
@@ -56,24 +54,23 @@ const sendEmail = async (to, subject, html) => {
   }
 
   try {
-    console.log(`📧 Sending email to ${to} via Gmail (port 465)...`);
+    console.log(`📧 Sending email to ${to} via AWS SES...`);
     
-    const transporter = createTransporter();
-    
-    const mailOptions = {
-      from: `"WUC Admissions" <${process.env.GMAIL_USER}>`,
-      to,
-      subject,
-      html
+    const params = {
+      Source: process.env.SES_FROM_EMAIL,
+      Destination: { ToAddresses: [to] },
+      Message: {
+        Subject: { Data: subject },
+        Body: { Html: { Data: html } }
+      },
+      ReplyToAddresses: [process.env.SES_REPLY_TO || process.env.SES_FROM_EMAIL]
     };
-    
-    const info = await transporter.sendMail(mailOptions);
 
-    console.log(`✅ Email sent successfully - ID: ${info.messageId}`);
-    return { success: true, messageId: info.messageId };
+    const result = await ses.sendEmail(params).promise();
+    console.log(`✅ Email sent successfully - ID: ${result.MessageId}`);
+    return { success: true, messageId: result.MessageId };
   } catch (error) {
     console.error(`❌ Email failed:`, error.message);
-    console.error('Full error:', error);
     return { success: false, error: error.message };
   }
 };
@@ -102,6 +99,7 @@ const sendVoucherEmail = async (email, voucherCode, firstName) => {
 const sendApplicationConfirmation = async (email, applicationId, firstName, applicationType = 'regular') => {
   const isTopUp = applicationType === 'topup';
   const typeLabel = isTopUp ? 'Top-Up / Access Programme' : 'Undergraduate';
+  const applyLink = isTopUp ? '/apply-topup' : '/apply';
 
   const content = `
     <h2>Application Received Successfully</h2>

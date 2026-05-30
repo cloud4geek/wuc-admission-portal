@@ -25,6 +25,13 @@ const VoucherPurchase: React.FC = () => {
       });
       const data = await response.json();
       if (data.success) {
+        if (data.requiresRedirect && data.paymentUrl) {
+          // Paystack redirect — save form data for callback, then redirect
+          sessionStorage.setItem('wuc_purchase_data', JSON.stringify({ ...formData, reference: data.reference }));
+          window.location.href = data.paymentUrl;
+          return;
+        }
+        // Dev mode or payment already verified — voucher issued immediately
         setVoucherCode(data.voucherCode);
         setMessage({ type: 'success', text: `Payment successful! A confirmation email has been sent to ${formData.email}.` });
       } else {
@@ -36,6 +43,42 @@ const VoucherPurchase: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Handle Paystack callback — verify payment and get voucher
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reference = params.get('reference') || params.get('trxref');
+    if (!reference) return;
+
+    const savedData = sessionStorage.getItem('wuc_purchase_data');
+    if (!savedData) return;
+
+    const purchaseData = JSON.parse(savedData);
+    sessionStorage.removeItem('wuc_purchase_data');
+
+    // Clean URL
+    window.history.replaceState({}, '', window.location.pathname);
+
+    // Verify and complete purchase
+    setLoading(true);
+    const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+    fetch(`${API}/api/vouchers/purchase`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...purchaseData, reference }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.voucherCode) {
+          setVoucherCode(data.voucherCode);
+          setMessage({ type: 'success', text: `Payment verified! Your voucher code is ready. A confirmation has been sent to ${purchaseData.email}.` });
+        } else {
+          setMessage({ type: 'error', text: data.message || 'Payment verification failed.' });
+        }
+      })
+      .catch(() => setMessage({ type: 'error', text: 'Verification failed. Contact admissions@wuc.edu.gh with your reference: ' + reference }))
+      .finally(() => setLoading(false));
+  }, []);
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(voucherCode);
