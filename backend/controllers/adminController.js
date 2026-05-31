@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { sendAdmissionLetter, sendEmail, emailTemplate } = require('../services/emailService');
 const { generateAdmissionLetter } = require('../services/admissionLetterService');
+const { sendSMS } = require('../services/smsService');
 const bcrypt = require('bcryptjs');
 const logger = require('../utils/logger');
 
@@ -147,6 +148,15 @@ const approveApplication = async (req, res, next) => {
     );
     audit(adminId, 'approve_application', 'application', application.id, { applicationId }, req.ip);
     sendAdmissionLetter(application.email, application.first_name, admissionLetterUrl || '#').catch(() => {});
+
+    // SMS notification with programme details (no fees)
+    const programme = choicesResult.rows
+      .filter(c => c.programme_id !== 'mature-access' && !/mature access/i.test(c.programme_label || ''))
+      .sort((a, b) => a.preference - b.preference)[0]?.programme_label || 'your selected programme';
+    const enrollment = application.enrollment_option || 'Regular';
+    const smsMsg = `Congratulations ${application.first_name}! Your WUC application (${applicationId}) has been APPROVED for ${programme} (${enrollment}). Download your admission letter at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/application-status`;
+    sendSMS(application.phone, smsMsg).catch(() => {});
+
     res.json({ success: true, message: 'Application approved and admission letter generated', admissionLetterUrl });
   } catch (error) { next(error); }
 };
@@ -164,6 +174,12 @@ const rejectApplication = async (req, res, next) => {
       [adminId || null, reason || null, applicationId.toUpperCase()]
     );
     audit(adminId, 'reject_application', 'application', appResult.rows[0].id, { applicationId, reason }, req.ip);
+
+    // SMS notification for rejection
+    const app = appResult.rows[0];
+    const smsMsg = `Dear ${app.first_name}, we regret to inform you that your WUC application (${applicationId}) was not successful. Contact admissions@wuc.edu.gh for more information.`;
+    sendSMS(app.phone, smsMsg).catch(() => {});
+
     res.json({ success: true, message: 'Application rejected' });
   } catch (error) { next(error); }
 };
@@ -191,8 +207,12 @@ const bulkAction = async (req, res, next) => {
         const url = letterPath ? `${process.env.API_URL || process.env.APP_URL}/${letterPath}` : null;
         await pool.query(`UPDATE applications SET status='approved', reviewed_at=NOW(), reviewed_by=$1, admission_letter_url=$2 WHERE application_id=$3`, [adminId, url, appId.toUpperCase()]);
         sendAdmissionLetter(app.email, app.first_name, url || '#').catch(() => {});
+        // SMS with programme details
+        const prog = choices.rows.filter(c => c.programme_id !== 'mature-access' && !/mature access/i.test(c.programme_label || '')).sort((a, b) => a.preference - b.preference)[0]?.programme_label || 'your selected programme';
+        sendSMS(app.phone, `Congratulations ${app.first_name}! Your WUC application (${appId}) has been APPROVED for ${prog} (${app.enrollment_option || 'Regular'}). Download your admission letter at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/application-status`).catch(() => {});
       } else {
         await pool.query(`UPDATE applications SET status='rejected', reviewed_at=NOW(), reviewed_by=$1, rejection_reason=$2 WHERE application_id=$3`, [adminId, reason || null, appId.toUpperCase()]);
+        sendSMS(app.phone, `Dear ${app.first_name}, we regret to inform you that your WUC application (${appId}) was not successful. Contact admissions@wuc.edu.gh for more information.`).catch(() => {});
       }
       audit(adminId, `bulk_${action}`, 'application', app.id, { applicationId: appId }, req.ip);
       processed++;
