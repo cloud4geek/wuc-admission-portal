@@ -3,23 +3,21 @@ const bcrypt = require('bcryptjs');
 const { pool } = require('../config/database');
 
 async function run() {
-  const resets = [
-    { email: 'admin@wuc.edu.gh', password: 'Admin@2026' },
-    { email: '233cyber@gmail.com', password: 'Rahman@2026' },
-    { email: 'cloud4geek@gmail.com', password: 'Rams360@2026' },
+  const users = [
+    { username: 'admin', email: 'admin@wuc.edu.gh', password: 'Admin@2026', role: 'super_admin' },
+    { username: 'rahman', email: '233cyber@gmail.com', password: 'Rahman@2026', role: 'admin' },
+    { username: 'rAms360', email: 'cloud4geek@gmail.com', password: 'Rams360@2026', role: 'super_admin' },
   ];
 
-  for (const { email, password } of resets) {
-    const hash = await bcrypt.hash(password, 10);
-    const result = await pool.query(
-      'UPDATE admin_users SET password_hash=$1 WHERE email=$2 RETURNING email',
-      [hash, email]
+  for (const u of users) {
+    const hash = await bcrypt.hash(u.password, 10);
+    await pool.query(
+      `INSERT INTO admin_users (username, email, password_hash, role)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (email) DO UPDATE SET password_hash = $3, username = $1, role = $4`,
+      [u.username, u.email, hash, u.role]
     );
-    if (result.rows.length > 0) {
-      console.log('✅', email, '→', password);
-    } else {
-      console.log('❌', email, '— not found in database');
-    }
+    console.log('✅', u.email, '→', u.password, `(${u.role})`);
   }
   pool.end();
 }

@@ -1,16 +1,16 @@
 /**
  * SMS Service — SMSOnlineGH (portal.smsonlinegh.com)
- * API Docs: https://dev.smsonlinegh.com
- * Endpoint: https://api.smsonlinegh.com/v5/message/sms/send
+ * Uses v4 API: https://api.smsonlinegh.com/v4/message/sms/send
+ * Sender ID must be registered on the SMSOnlineGH portal before use.
  */
 const axios = require('axios');
 
-const API_URL = 'https://api.smsonlinegh.com/v5/message/sms/send';
+const API_URL = 'https://api.smsonlinegh.com/v4/message/sms/send';
 const API_KEY = () => process.env.SMSONLINEGH_API_KEY || '';
-const SENDER_ID = () => process.env.SMS_SENDER_ID || 'WUC-ADM';
+const SENDER_ID = () => process.env.SMS_SENDER_ID || 'WUC';
 
 /**
- * Send SMS via SMSOnlineGH API
+ * Send SMS via SMSOnlineGH v4 API
  */
 const sendSMS = async (phone, message) => {
   const key = API_KEY();
@@ -29,31 +29,28 @@ const sendSMS = async (phone, message) => {
       formattedPhone = formattedPhone.substring(1);
     }
 
-    const response = await axios.post(API_URL, {
-      messages: [
-        {
-          text: message,
-          type: 0,
-          sender: SENDER_ID(),
-          destinations: [formattedPhone],
-        },
-      ],
-    }, {
-      headers: {
-        'Authorization': `key ${key}`,
-        'Content-Type': 'application/json',
-        'Host': 'api.smsonlinegh.com',
+    const response = await axios.get(API_URL, {
+      params: {
+        key,
+        text: message,
+        type: 0,
+        sender: SENDER_ID(),
+        to: formattedPhone,
       },
       timeout: 15000,
     });
 
     const data = response.data;
-    if (data && (data.status === 200 || data.handshake === 'sent')) {
-      console.log(`✅ SMS sent to ${phone} via SMSOnlineGH`);
-      return { success: true, messageId: data.messageId || `SMSONLINE-${Date.now()}`, response: data };
+    const dest = data?.data?.messages?.[0]?.destinations?.[0];
+    const status = dest?.status;
+
+    if (data.handshake?.label === 'HSHK_OK' && status?.id !== 2128) {
+      console.log(`✅ SMS sent to ${phone} via SMSOnlineGH | ID: ${dest?.messageId}`);
+      return { success: true, messageId: dest?.messageId || `SMSONLINE-${Date.now()}` };
     } else {
-      console.error('❌ SMSOnlineGH error:', data);
-      return { success: false, error: data?.message || 'SMS sending failed' };
+      const errMsg = status?.label || data.handshake?.label || 'Unknown error';
+      console.error(`❌ SMSOnlineGH: ${errMsg}`);
+      return { success: false, error: errMsg };
     }
   } catch (error) {
     console.error('❌ SMS error:', error.response?.data || error.message);
@@ -61,33 +58,22 @@ const sendSMS = async (phone, message) => {
   }
 };
 
-/**
- * Send voucher code via SMS
- */
+/** Send voucher code via SMS */
 const sendVoucherSMS = async (phone, voucherCode) => {
   const message = `WUC Admission: Your voucher code is ${voucherCode}. Valid for 30 days. Apply at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/apply`;
   return sendSMS(phone, message);
 };
 
-/**
- * Send application confirmation via SMS
- */
+/** Send application confirmation via SMS */
 const sendApplicationSMS = async (phone, applicationId) => {
-  const message = `WUC Admission: Application ${applicationId} received successfully. Track status at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/application-status`;
+  const message = `WUC Admission: Application ${applicationId} received. Track at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/application-status`;
   return sendSMS(phone, message);
 };
 
-/**
- * Send admission approval via SMS
- */
+/** Send admission approval via SMS */
 const sendAdmissionSMS = async (phone, applicationId) => {
-  const message = `Congratulations! Your WUC admission application ${applicationId} has been APPROVED. Download your admission letter at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/application-status`;
+  const message = `Congratulations! WUC application ${applicationId} APPROVED. Download letter at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/application-status`;
   return sendSMS(phone, message);
 };
 
-module.exports = {
-  sendSMS,
-  sendVoucherSMS,
-  sendApplicationSMS,
-  sendAdmissionSMS,
-};
+module.exports = { sendSMS, sendVoucherSMS, sendApplicationSMS, sendAdmissionSMS };
