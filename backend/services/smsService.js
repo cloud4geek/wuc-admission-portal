@@ -1,66 +1,63 @@
+/**
+ * SMS Service — SMSOnlineGH (portal.smsonlinegh.com)
+ * API Docs: https://dev.smsonlinegh.com
+ * Endpoint: https://api.smsonlinegh.com/v5/message/sms/send
+ */
 const axios = require('axios');
 
-const ARKESEL_API_URL = 'https://sms.arkesel.com/sms/api';
+const API_URL = 'https://api.smsonlinegh.com/v5/message/sms/send';
+const API_KEY = () => process.env.SMSONLINEGH_API_KEY || '';
+const SENDER_ID = () => process.env.SMS_SENDER_ID || 'WUC-ADM';
 
 /**
- * Send SMS via Arkesel API
- * API Format: https://sms.arkesel.com/sms/api?action=send-sms&api_key=KEY&to=PHONE&from=SENDER&sms=MESSAGE
+ * Send SMS via SMSOnlineGH API
  */
 const sendSMS = async (phone, message) => {
-  // Check if API key is configured
-  if (!process.env.ARKESEL_API_KEY || process.env.ARKESEL_API_KEY === 'your_arkesel_api_key') {
-    console.log(`📱 [DEV SMS - No API Key] To: ${phone}`);
-    console.log(`📱 [DEV SMS - No API Key] Message: ${message}`);
+  const key = API_KEY();
+  if (!key || key === 'your_smsonlinegh_api_key') {
+    console.log(`📱 [DEV SMS] To: ${phone} | Message: ${message}`);
     return { success: true, messageId: `DEV-SMS-${Date.now()}` };
   }
 
   try {
-    // Format phone number (remove spaces, keep + or add 233 prefix)
-    let formattedPhone = phone.replace(/\s/g, '');
-    
-    // If starts with 0, replace with 233
+    // Format phone: remove spaces, ensure 233 prefix
+    let formattedPhone = phone.replace(/[\s\-()]/g, '');
     if (formattedPhone.startsWith('0')) {
       formattedPhone = '233' + formattedPhone.substring(1);
     }
-    // Remove + if present
-    formattedPhone = formattedPhone.replace('+', '');
+    if (formattedPhone.startsWith('+')) {
+      formattedPhone = formattedPhone.substring(1);
+    }
 
-    const response = await axios.get(ARKESEL_API_URL, {
-      params: {
-        action: 'send-sms',
-        api_key: process.env.ARKESEL_API_KEY,
-        to: formattedPhone,
-        from: process.env.SMS_SENDER_ID || 'WUC-ADM',
-        sms: message
+    const response = await axios.post(API_URL, {
+      messages: [
+        {
+          text: message,
+          type: 0,
+          sender: SENDER_ID(),
+          destinations: [formattedPhone],
+        },
+      ],
+    }, {
+      headers: {
+        'Authorization': `key ${key}`,
+        'Content-Type': 'application/json',
+        'Host': 'api.smsonlinegh.com',
       },
-      timeout: 10000
+      timeout: 15000,
     });
 
-    // Arkesel returns different response formats
-    const responseData = response.data;
-    
-    // Check for success (response can be string or object)
-    if (responseData.code === '200' || 
-        responseData.code === 200 || 
-        responseData.code === 'ok' ||
-        responseData.message === 'Successfully Sent' ||
-        (typeof responseData === 'string' && responseData.includes('successfully'))) {
-      console.log(`✅ SMS sent to ${phone} via Arkesel`);
-      return { 
-        success: true, 
-        messageId: responseData.message_id || `ARKESEL-${Date.now()}`,
-        response: responseData
-      };
+    const data = response.data;
+    if (data && (data.status === 200 || data.handshake === 'sent')) {
+      console.log(`✅ SMS sent to ${phone} via SMSOnlineGH`);
+      return { success: true, messageId: data.messageId || `SMSONLINE-${Date.now()}`, response: data };
     } else {
-      console.error('❌ Arkesel SMS error:', responseData);
-      return { success: false, error: responseData.message || 'SMS sending failed' };
+      console.error('❌ SMSOnlineGH error:', data);
+      return { success: false, error: data?.message || 'SMS sending failed' };
     }
   } catch (error) {
     console.error('❌ SMS error:', error.response?.data || error.message);
-    return { 
-      success: false, 
-      error: error.response?.data || error.message 
-    };
+    return { success: false, error: error.response?.data?.message || error.message };
   }
 };
 
@@ -68,7 +65,7 @@ const sendSMS = async (phone, message) => {
  * Send voucher code via SMS
  */
 const sendVoucherSMS = async (phone, voucherCode) => {
-  const message = `WUC Admission: Your voucher code is ${voucherCode}. Valid for 30 days. Apply at ${process.env.APP_URL}/apply`;
+  const message = `WUC Admission: Your voucher code is ${voucherCode}. Valid for 30 days. Apply at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/apply`;
   return sendSMS(phone, message);
 };
 
@@ -76,7 +73,7 @@ const sendVoucherSMS = async (phone, voucherCode) => {
  * Send application confirmation via SMS
  */
 const sendApplicationSMS = async (phone, applicationId) => {
-  const message = `WUC Admission: Application ${applicationId} received successfully. Track status at ${process.env.APP_URL}/application-status`;
+  const message = `WUC Admission: Application ${applicationId} received successfully. Track status at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/application-status`;
   return sendSMS(phone, message);
 };
 
@@ -84,13 +81,13 @@ const sendApplicationSMS = async (phone, applicationId) => {
  * Send admission approval via SMS
  */
 const sendAdmissionSMS = async (phone, applicationId) => {
-  const message = `Congratulations! Your WUC admission application ${applicationId} has been APPROVED. Download your admission letter at ${process.env.APP_URL}/application-status`;
+  const message = `Congratulations! Your WUC admission application ${applicationId} has been APPROVED. Download your admission letter at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/application-status`;
   return sendSMS(phone, message);
 };
 
-module.exports = { 
-  sendSMS, 
-  sendVoucherSMS, 
+module.exports = {
+  sendSMS,
+  sendVoucherSMS,
   sendApplicationSMS,
-  sendAdmissionSMS 
+  sendAdmissionSMS,
 };
