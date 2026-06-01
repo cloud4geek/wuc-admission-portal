@@ -31,6 +31,14 @@ const templateUpload = multer({
   },
 });
 
+// Inject token from query param for routes that use window.open (can't set headers)
+router.use((req, res, next) => {
+  if (!req.headers.authorization && req.query.token) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  next();
+});
+
 router.use(authenticateAdmin);
 
 /* Dashboard */
@@ -53,14 +61,8 @@ router.post('/documents/:documentId/verify', verifyDocument);
 router.get('/vouchers', getAllVouchers);
 router.post('/vouchers/:voucherId/cancel', cancelVoucher);
 
-/* Export — accepts token from query param for window.open downloads */
-router.get('/export/applications', (req, res, next) => {
-  // Allow token from query param as fallback for window.open
-  if (!req.headers.authorization && req.query.token) {
-    req.headers.authorization = `Bearer ${req.query.token}`;
-  }
-  next();
-}, exportApplications);
+/* Export */
+router.get('/export/applications', exportApplications);
 
 /* Audit logs — super_admin only */
 const superAdminOnly = (req, res, next) => {
