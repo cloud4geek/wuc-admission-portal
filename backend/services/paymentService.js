@@ -113,6 +113,7 @@ function getChannels(method) {
   switch (method) {
     case 'mtn':
     case 'telecel':
+    case 'at_money':
     case 'mobile_money':
       return ['mobile_money'];
     case 'visa':
@@ -120,7 +121,7 @@ function getChannels(method) {
     case 'card':
       return ['card'];
     default:
-      return ['card', 'mobile_money'];
+      return ['mobile_money'];
   }
 }
 

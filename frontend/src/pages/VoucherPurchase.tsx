@@ -89,8 +89,7 @@ const VoucherPurchase: React.FC = () => {
   const paymentOptions = [
     { value: 'mtn', label: 'MTN Mobile Money' },
     { value: 'telecel', label: 'Telecel Cash' },
-    { value: 'visa', label: 'Visa Card' },
-    { value: 'mastercard', label: 'Mastercard' },
+    { value: 'at_money', label: 'AT Money' },
   ];
 
   return (
