@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 
 *, *::before, *::after {
   margin: 0;
@@ -8,10 +8,12 @@
 
 :root {
   --primary:        #0a2240;
-  --primary-mid:    #0f3460;
+  --primary-mid:    #0e3460;
   --primary-light:  #1a5276;
   --primary-hover:  #0d2d4f;
+  --primary-dark:   #061729;
   --accent:         #c9a84c;
+  --accent-light:   #e0c76e;
   --accent-dark:    #a8893a;
   --success:        #0e7a4e;
   --success-bg:     #ecfdf5;
@@ -26,24 +28,25 @@
   --info-bg:        #eff6ff;
   --info-border:    #93c5fd;
   --surface:        #ffffff;
-  --surface-2:      #f5f7fa;
-  --surface-3:      #eef1f6;
+  --surface-2:      #f7f9fc;
+  --surface-3:      #edf1f7;
   --border:         #dde3ec;
   --border-focus:   #1a5276;
   --text-primary:   #0d1b2a;
   --text-secondary: #4a5568;
   --text-muted:     #8a9ab0;
-  --shadow-xs:  0 1px 2px rgba(10,34,64,0.06);
-  --shadow-sm:  0 2px 8px rgba(10,34,64,0.08);
-  --shadow-md:  0 4px 20px rgba(10,34,64,0.10);
-  --shadow-lg:  0 8px 40px rgba(10,34,64,0.13);
-  --shadow-xl:  0 16px 60px rgba(10,34,64,0.16);
-  --radius-xs:  4px;
+  --shadow-xs:  0 1px 2px rgba(10,34,64,0.04);
+  --shadow-sm:  0 2px 8px rgba(10,34,64,0.06), 0 1px 3px rgba(10,34,64,0.04);
+  --shadow-md:  0 4px 20px rgba(10,34,64,0.08), 0 2px 6px rgba(10,34,64,0.04);
+  --shadow-lg:  0 8px 40px rgba(10,34,64,0.10), 0 4px 12px rgba(10,34,64,0.05);
+  --shadow-xl:  0 20px 60px rgba(10,34,64,0.14), 0 8px 20px rgba(10,34,64,0.06);
+  --radius-xs:  5px;
   --radius-sm:  8px;
-  --radius-md:  12px;
-  --radius-lg:  18px;
+  --radius-md:  14px;
+  --radius-lg:  20px;
   --radius-xl:  28px;
-  --transition: 0.2s ease;
+  --transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 html { scroll-behavior: smooth; }
