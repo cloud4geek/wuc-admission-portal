@@ -63,11 +63,34 @@ const submitLimiter = rateLimit({
 /* ── Body parsing & static files ── */
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
-app.use('/uploads', express.static('uploads'));
-app.use('/uploads/photos', express.static('uploads/photos'));
+
+// Public files — admission letters and application forms (shared with applicants)
 app.use('/uploads/admission-letters', express.static('uploads/admission-letters'));
 app.use('/uploads/application-forms', express.static('uploads/application-forms'));
 app.use('/uploads/templates', express.static('uploads/templates'));
+
+// Protected files — documents and photos require admin auth or valid token
+const jwtUtil = require('./utils/jwt');
+app.use('/uploads/documents', (req, res, next) => {
+  try {
+    const token = req.query.token || (req.headers.authorization || '').replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Access denied' });
+    jwtUtil.verifyAdminToken(token);
+    next();
+  } catch { return res.status(403).json({ error: 'Invalid token' }); }
+}, express.static('uploads/documents'));
+
+app.use('/uploads/photos', (req, res, next) => {
+  try {
+    const token = req.query.token || (req.headers.authorization || '').replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'Access denied' });
+    jwtUtil.verifyAdminToken(token);
+    next();
+  } catch { return res.status(403).json({ error: 'Invalid token' }); }
+}, express.static('uploads/photos'));
+
+// Catch-all for other uploads (fallback - no auth)
+app.use('/uploads', express.static('uploads'));
 
 /* ── Routes ── */
 const authRoutes = require('./routes/auth');
