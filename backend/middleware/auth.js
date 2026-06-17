@@ -35,4 +35,22 @@ const authenticateAdmin = (req, res, next) => {
   }
 };
 
-module.exports = { authenticate, authenticateAdmin };
+const authenticateStudent = (req, res, next) => {
+  try {
+    const token = extractToken(req);
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Access denied. No token provided.' });
+    }
+    const decoded = jwtUtil.verifyToken(token);
+    if (decoded.role !== 'student') {
+      return res.status(403).json({ success: false, error: 'Student access required' });
+    }
+    req.student = decoded;
+    next();
+  } catch (error) {
+    logger.warn('Invalid student token attempt', { ip: req.ip, error: error.message });
+    return res.status(403).json({ success: false, error: 'Invalid or expired token' });
+  }
+};
+
+module.exports = { authenticate, authenticateAdmin, authenticateStudent };

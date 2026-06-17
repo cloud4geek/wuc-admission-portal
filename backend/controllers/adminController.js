@@ -1,9 +1,10 @@
 const { pool } = require('../config/database');
 const fs = require('fs');
 const path = require('path');
-const { sendAdmissionLetter, sendEmail, emailTemplate } = require('../services/emailService');
+const { sendAdmissionLetter, sendEmail, emailTemplate, sendStudentCredentials } = require('../services/emailService');
 const { generateAdmissionLetter } = require('../services/admissionLetterService');
 const { sendSMS } = require('../services/smsService');
+const { createStudentAccount } = require('./studentController');
 const bcrypt = require('bcryptjs');
 const logger = require('../utils/logger');
 
@@ -149,6 +150,18 @@ const approveApplication = async (req, res, next) => {
     audit(adminId, 'approve_application', 'application', application.id, { applicationId }, req.ip);
     sendAdmissionLetter(application.email, application.first_name, admissionLetterUrl || '#').catch(() => {});
 
+    // Create student account and send credentials via separate email
+    try {
+      const { studentId, password, alreadyExists } = await createStudentAccount(application, choicesResult.rows);
+      if (!alreadyExists && password) {
+        sendStudentCredentials(application.email, application.first_name, studentId, password).catch(() => {});
+        // Also SMS the student ID (but not password for security)
+        sendSMS(application.phone, `Your WUC Student Portal login has been created. Student ID: ${studentId}. Check your email for your password. Login at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/student/login`).catch(() => {});
+      }
+    } catch (err) {
+      logger.error('Student account creation failed', { applicationId, error: err.message });
+    }
+
     // SMS notification with programme details (no fees)
     const programme = choicesResult.rows
       .filter(c => c.programme_id !== 'mature-access' && !/mature access/i.test(c.programme_label || ''))
@@ -207,6 +220,14 @@ const bulkAction = async (req, res, next) => {
         const url = letterPath ? `${process.env.API_URL || process.env.APP_URL}/${letterPath}` : null;
         await pool.query(`UPDATE applications SET status='approved', reviewed_at=NOW(), reviewed_by=$1, admission_letter_url=$2 WHERE application_id=$3`, [adminId, url, appId.toUpperCase()]);
         sendAdmissionLetter(app.email, app.first_name, url || '#').catch(() => {});
+        // Create student account and send credentials
+        try {
+          const { studentId, password, alreadyExists } = await createStudentAccount(app, choices.rows);
+          if (!alreadyExists && password) {
+            sendStudentCredentials(app.email, app.first_name, studentId, password).catch(() => {});
+            sendSMS(app.phone, `Your WUC Student Portal login has been created. Student ID: ${studentId}. Check your email for your password. Login at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/student/login`).catch(() => {});
+          }
+        } catch (err) { logger.error('Bulk student account creation failed', { appId, error: err.message }); }
         // SMS with programme details
         const prog = choices.rows.filter(c => c.programme_id !== 'mature-access' && !/mature access/i.test(c.programme_label || '')).sort((a, b) => a.preference - b.preference)[0]?.programme_label || 'your selected programme';
         sendSMS(app.phone, `Congratulations ${app.first_name}! Your WUC application (${appId}) has been APPROVED for ${prog} (${app.enrollment_option || 'Regular'}). Download your admission letter at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/application-status`).catch(() => {});
@@ -778,6 +799,21 @@ const manualEnrol = async (req, res, next) => {
     // Send admission letter email
     if (letterUrl) {
       sendAdmissionLetter(email, firstName, letterUrl).catch(() => {});
+    }
+
+    // Create student account and send credentials
+    let studentInfo = null;
+    try {
+      const fullAppData = fullApp.rows[0];
+      const { studentId, password, alreadyExists } = await createStudentAccount(fullAppData, choices.rows);
+      if (!alreadyExists && password) {
+        sendStudentCredentials(email, firstName, studentId, password).catch(() => {});
+        studentInfo = { studentId };
+      } else if (alreadyExists) {
+        studentInfo = { studentId, alreadyExists: true };
+      }
+    } catch (err) {
+      logger.error('Manual enrolment student account failed', { applicationId, error: err.message });
     }
 
     audit(adminId, 'manual_enrolment', 'application', appUUID,

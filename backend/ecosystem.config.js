@@ -7,37 +7,49 @@ module.exports = {
       instances: 2,
       exec_mode: 'cluster',
       env: {
+        NODE_ENV: 'development',
+        PORT: 5000
+      },
+      env_production: {
         NODE_ENV: 'production',
         PORT: 5000
       },
+      // Logging
       error_file: '/var/log/wuc/api-error.log',
       out_file: '/var/log/wuc/api-out.log',
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       merge_logs: true,
+      // Process management
       max_memory_restart: '500M',
       autorestart: true,
       max_restarts: 10,
       min_uptime: '10s',
-      listen_timeout: 3000,
+      listen_timeout: 5000,
       kill_timeout: 5000,
       wait_ready: true,
+      // File watching (disabled in production)
       watch: false,
       ignore_watch: ['node_modules', 'uploads', 'logs'],
-      env_production: {
-        NODE_ENV: 'production'
-      }
+      // Graceful reload
+      shutdown_with_message: true,
+      // Environment file
+      node_args: '--max-old-space-size=512',
     }
   ],
 
   deploy: {
     production: {
       user: 'deploy',
-      host: 'your-server-ip',
+      host: ['your-server-ip'],
       ref: 'origin/main',
       repo: 'git@github.com:your-org/wuc-admission-portal.git',
       path: '/var/www/wuc-admission-portal',
-      'post-deploy': 'cd backend && npm install --production && pm2 reload ecosystem.config.js --env production',
-      'pre-setup': 'mkdir -p /var/www/wuc-admission-portal'
+      'pre-deploy': 'git fetch --all',
+      'post-deploy': 'cd backend && npm ci --production && cd ../frontend && npm ci && npm run build && cd ../backend && pm2 reload ecosystem.config.js --env production',
+      'pre-setup': 'mkdir -p /var/www/wuc-admission-portal',
+      env: {
+        NODE_ENV: 'production'
+      }
     }
   }
 };

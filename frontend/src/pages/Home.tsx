@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import Footer from '../components/Footer';
 
 const Home: React.FC = () => (
   <div>
@@ -18,6 +19,7 @@ const Home: React.FC = () => (
             <li><Link to="/purchase-voucher">Buy Voucher</Link></li>
             <li><Link to="/application-status">Check Status</Link></li>
             <li><Link to="/apply">Regular Apply</Link></li>
+            <li><Link to="/student/login">Student Portal</Link></li>
             <li><Link to="/apply-topup" className="nav-cta">Top-Up Apply</Link></li>
           </ul>
         </nav>
@@ -203,6 +205,7 @@ const Home: React.FC = () => (
         </div>
       </div>
     </div>
+    <Footer />
   </div>
 );
 

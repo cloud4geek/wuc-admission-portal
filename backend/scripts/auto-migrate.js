@@ -233,6 +233,60 @@ async function autoMigrate() {
       console.log('  ✅ notifications');
     }
 
+    // ── students ──
+    if (!has.has('students')) {
+      await client.query(`
+        CREATE TABLE students (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          student_id VARCHAR(20) UNIQUE NOT NULL,
+          application_id UUID REFERENCES applications(id),
+          first_name VARCHAR(100) NOT NULL,
+          last_name VARCHAR(100) NOT NULL,
+          other_names VARCHAR(100),
+          email VARCHAR(255) NOT NULL,
+          phone VARCHAR(20) NOT NULL,
+          date_of_birth DATE,
+          gender VARCHAR(10),
+          nationality VARCHAR(100) DEFAULT 'Ghanaian',
+          hometown VARCHAR(100),
+          postal_address TEXT,
+          programme_id VARCHAR(60),
+          programme_label TEXT,
+          enrollment_option VARCHAR(20) DEFAULT 'Regular',
+          application_type VARCHAR(10) DEFAULT 'regular',
+          password_hash TEXT NOT NULL,
+          must_change_password BOOLEAN DEFAULT true,
+          reset_token TEXT,
+          reset_token_expires TIMESTAMP,
+          status VARCHAR(20) DEFAULT 'active',
+          last_login TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+      console.log('  ✅ students');
+    } else {
+      // Add reset_token columns if missing
+      await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS reset_token TEXT`).catch(() => {});
+      await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP`).catch(() => {});
+    }
+
+    // ── announcements ──
+    if (!has.has('announcements')) {
+      await client.query(`
+        CREATE TABLE announcements (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          title VARCHAR(255) NOT NULL,
+          content TEXT NOT NULL,
+          priority VARCHAR(20) DEFAULT 'normal',
+          target VARCHAR(20) DEFAULT 'all',
+          is_active BOOLEAN DEFAULT true,
+          created_by UUID REFERENCES admin_users(id),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+      console.log('  ✅ announcements');
+    }
+
     // ── audit_logs ──
     if (!has.has('audit_logs')) {
       await client.query(`
@@ -302,6 +356,204 @@ async function autoMigrate() {
       }
     }
 
+    // ── courses ──
+    if (!has.has('courses')) {
+      await client.query(`
+        CREATE TABLE courses (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          course_code VARCHAR(20) UNIQUE NOT NULL,
+          course_title VARCHAR(255) NOT NULL,
+          credit_hours INTEGER NOT NULL DEFAULT 3,
+          programme_id VARCHAR(60),
+          semester INTEGER NOT NULL,
+          level INTEGER NOT NULL DEFAULT 100,
+          course_type VARCHAR(20) DEFAULT 'core',
+          lecturer VARCHAR(255),
+          description TEXT,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+      console.log('  ✅ courses');
+    }
+
+    // ── course_registrations ──
+    if (!has.has('course_registrations')) {
+      await client.query(`
+        CREATE TABLE course_registrations (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+          course_id UUID NOT NULL REFERENCES courses(id),
+          academic_year VARCHAR(20) NOT NULL DEFAULT '2025/2026',
+          semester INTEGER NOT NULL,
+          status VARCHAR(20) DEFAULT 'registered',
+          registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (student_id, course_id, academic_year, semester)
+        )`);
+      console.log('  ✅ course_registrations');
+    }
+
+    // ── results ──
+    if (!has.has('results')) {
+      await client.query(`
+        CREATE TABLE results (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+          course_id UUID NOT NULL REFERENCES courses(id),
+          academic_year VARCHAR(20) NOT NULL,
+          semester INTEGER NOT NULL,
+          score DECIMAL(5,2),
+          grade VARCHAR(5),
+          grade_point DECIMAL(3,2),
+          status VARCHAR(20) DEFAULT 'pending',
+          submitted_by UUID REFERENCES lecturers(id),
+          published_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (student_id, course_id, academic_year, semester)
+        )`);
+      console.log('  ✅ results');
+    } else {
+      // Add submitted_by if missing
+      await client.query(`ALTER TABLE results ADD COLUMN IF NOT EXISTS submitted_by UUID REFERENCES lecturers(id)`).catch(() => {});
+    }
+
+    // ── timetable ──
+    if (!has.has('timetable')) {
+      await client.query(`
+        CREATE TABLE timetable (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          course_id UUID REFERENCES courses(id),
+          programme_id VARCHAR(60),
+          level INTEGER NOT NULL DEFAULT 100,
+          semester INTEGER NOT NULL,
+          academic_year VARCHAR(20) NOT NULL DEFAULT '2025/2026',
+          day_of_week VARCHAR(15) NOT NULL,
+          start_time TIME NOT NULL,
+          end_time TIME NOT NULL,
+          venue VARCHAR(255),
+          lecturer VARCHAR(255),
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+      console.log('  ✅ timetable');
+    }
+
+    // ── document_requests ──
+    if (!has.has('document_requests')) {
+      await client.query(`
+        CREATE TABLE document_requests (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+          document_type VARCHAR(50) NOT NULL,
+          reason TEXT,
+          copies INTEGER DEFAULT 1,
+          status VARCHAR(20) DEFAULT 'pending',
+          admin_notes TEXT,
+          processed_by UUID REFERENCES admin_users(id),
+          processed_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+      console.log('  ✅ document_requests');
+    }
+
+    // ── support_tickets ──
+    if (!has.has('support_tickets')) {
+      await client.query(`
+        CREATE TABLE support_tickets (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+          subject VARCHAR(255) NOT NULL,
+          category VARCHAR(50) NOT NULL,
+          message TEXT NOT NULL,
+          priority VARCHAR(20) DEFAULT 'normal',
+          status VARCHAR(20) DEFAULT 'open',
+          admin_reply TEXT,
+          replied_by UUID REFERENCES admin_users(id),
+          replied_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+      console.log('  ✅ support_tickets');
+    }
+
+    // ── resources (library/e-books/materials) ──
+    if (!has.has('resources')) {
+      await client.query(`
+        CREATE TABLE resources (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          title VARCHAR(255) NOT NULL,
+          description TEXT,
+          category VARCHAR(50) NOT NULL,
+          file_url TEXT,
+          external_url TEXT,
+          programme_id VARCHAR(60),
+          level INTEGER,
+          semester INTEGER,
+          uploaded_by UUID REFERENCES admin_users(id),
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+      console.log('  ✅ resources');
+    }
+
+    // ── exam_schedule ──
+    if (!has.has('exam_schedule')) {
+      await client.query(`
+        CREATE TABLE exam_schedule (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          course_id UUID REFERENCES courses(id),
+          academic_year VARCHAR(20) NOT NULL DEFAULT '2025/2026',
+          semester INTEGER NOT NULL,
+          exam_date DATE NOT NULL,
+          start_time TIME NOT NULL,
+          end_time TIME NOT NULL,
+          venue VARCHAR(255),
+          exam_type VARCHAR(30) DEFAULT 'final',
+          instructions TEXT,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+      console.log('  ✅ exam_schedule');
+    }
+
+    // ── lecturers ──
+    if (!has.has('lecturers')) {
+      await client.query(`
+        CREATE TABLE lecturers (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          staff_id VARCHAR(20) UNIQUE NOT NULL,
+          first_name VARCHAR(100) NOT NULL,
+          last_name VARCHAR(100) NOT NULL,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          phone VARCHAR(20),
+          department VARCHAR(100),
+          title VARCHAR(50) DEFAULT 'Mr.',
+          password_hash TEXT NOT NULL,
+          is_active BOOLEAN DEFAULT true,
+          last_login TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+      console.log('  ✅ lecturers');
+    } else {
+      // Add setup columns if missing
+      await client.query(`ALTER TABLE lecturers ADD COLUMN IF NOT EXISTS reset_token TEXT`).catch(() => {});
+      await client.query(`ALTER TABLE lecturers ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP`).catch(() => {});
+    }
+
+    // ── lecturer_courses (which courses a lecturer teaches) ──
+    if (!has.has('lecturer_courses')) {
+      await client.query(`
+        CREATE TABLE lecturer_courses (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          lecturer_id UUID NOT NULL REFERENCES lecturers(id) ON DELETE CASCADE,
+          course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+          academic_year VARCHAR(20) NOT NULL DEFAULT '2025/2026',
+          semester INTEGER NOT NULL,
+          UNIQUE (lecturer_id, course_id, academic_year, semester)
+        )`);
+      console.log('  ✅ lecturer_courses');
+    }
+
     // ── Indexes ──
     const indexes = [
       ['idx_vouchers_code',    'vouchers(voucher_code)'],
@@ -319,6 +571,18 @@ async function autoMigrate() {
       ['idx_docs_app',         'documents(application_id)'],
       ['idx_pay_ref',          'payments(payment_reference)'],
       ['idx_fees_prog',        'programme_fees(programme_id, application_type, enrollment_option)'],
+      ['idx_students_sid',     'students(student_id)'],
+      ['idx_students_email',   'students(email)'],
+      ['idx_students_app',     'students(application_id)'],
+      ['idx_courses_code',     'courses(course_code)'],
+      ['idx_courses_prog',     'courses(programme_id, level, semester)'],
+      ['idx_reg_student',      'course_registrations(student_id, academic_year, semester)'],
+      ['idx_results_student',  'results(student_id, academic_year, semester)'],
+      ['idx_timetable_prog',   'timetable(programme_id, level, semester, academic_year)'],
+      ['idx_docreq_student',   'document_requests(student_id)'],
+      ['idx_tickets_student',  'support_tickets(student_id)'],
+      ['idx_resources_cat',    'resources(category, programme_id)'],
+      ['idx_exams_course',     'exam_schedule(course_id, academic_year, semester)'],
     ];
     for (const [name, def] of indexes) {
       await client.query(`CREATE INDEX IF NOT EXISTS ${name} ON ${def}`).catch(() => {});

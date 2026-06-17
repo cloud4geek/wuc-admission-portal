@@ -160,4 +160,44 @@ const sendPasswordResetEmail = async (email, username, resetUrl) => {
   return sendEmail(email, 'Admin Password Reset - WUC Portal', emailTemplate(content));
 };
 
-module.exports = { sendEmail, emailTemplate, sendVoucherEmail, sendApplicationConfirmation, sendAdmissionLetter, sendPasswordResetEmail };
+const sendStudentCredentials = async (email, firstName, studentId, password) => {
+  const portalUrl = `${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/student/login`;
+  const content = `
+    <h2>🎓 Your Student Portal Account</h2>
+    <p>Dear ${firstName},</p>
+    <p>Your student portal account has been created. Use the credentials below to access the WUC Student Portal where you can view your fee structure, download your admission letter, and manage your profile.</p>
+    <div style="background: #f0f4f8; border: 2px solid #003366; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
+      <p style="margin: 0 0 10px 0; font-size: 14px; color: #666;">Student ID</p>
+      <p style="margin: 0 0 15px 0; font-size: 22px; font-weight: bold; color: #003366;">${studentId}</p>
+      <p style="margin: 0 0 10px 0; font-size: 14px; color: #666;">Temporary Password</p>
+      <p style="margin: 0; font-size: 22px; font-weight: bold; color: #003366;">${password}</p>
+    </div>
+    <p style="text-align: center;">
+      <a href="${portalUrl}" class="button">Login to Student Portal</a>
+    </p>
+    <p><strong>Important:</strong></p>
+    <ul>
+      <li>Please change your password after your first login</li>
+      <li>Do not share your credentials with anyone</li>
+      <li>Your Student ID is your permanent identifier at WUC</li>
+    </ul>
+    <p>Best regards,<br><strong>WUC Admissions Office</strong><br>Withrow University College</p>
+  `;
+  return sendEmail(email, `Your WUC Student Portal Login [${studentId}]`, emailTemplate(content));
+};
+
+const sendStudentPasswordReset = async (email, firstName, resetUrl) => {
+  const content = `
+    <h2>Password Reset Request</h2>
+    <p>Dear ${firstName},</p>
+    <p>We received a request to reset your Student Portal password. Click the button below to set a new password.</p>
+    <p style="text-align: center;">
+      <a href="${resetUrl}" class="button">Reset Password</a>
+    </p>
+    <p>This link expires in <strong>1 hour</strong>. If you did not request a password reset, you can safely ignore this email.</p>
+    <p>Best regards,<br><strong>WUC Student Services</strong></p>
+  `;
+  return sendEmail(email, 'Student Portal Password Reset - WUC', emailTemplate(content));
+};
+
+module.exports = { sendEmail, emailTemplate, sendVoucherEmail, sendApplicationConfirmation, sendAdmissionLetter, sendPasswordResetEmail, sendStudentCredentials, sendStudentPasswordReset };

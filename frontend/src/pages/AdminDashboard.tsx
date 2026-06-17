@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import StudentPortalAdmin from './StudentPortalAdmin';
 
 const PasswordInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => {
   const [show, setShow] = useState(false);
@@ -545,6 +546,8 @@ const AdminDashboard: React.FC = () => {
     { to: '/admin', label: 'Overview', exact: true },
     { to: '/admin/applications', label: 'Applications' },
     { to: '/admin/vouchers', label: 'Vouchers' },
+    { to: '/admin/students', label: 'Students' },
+    { to: '/admin/staff', label: 'Staff' },
     { to: '/admin/fees', label: 'Fees' },
     ...(adminUser.role === 'super_admin' ? [{ to: '/admin/users', label: 'Users' }] : []),
   ];
@@ -553,6 +556,8 @@ const AdminDashboard: React.FC = () => {
   const moreItems = [
     ...(adminUser.role === 'super_admin' ? [{ to: '/admin/audit',    label: '📋 Audit Log' }] : []),
     { to: '/admin/template', label: '🖼 Template' },
+    { to: '/admin/announcements', label: '📢 Announcements' },
+    { to: '/admin/portal-management', label: '🎓 Portal Admin' },
     ...(adminUser.role === 'super_admin' ? [{ to: '/admin/enrolments', label: '✅ Enrolments' }] : []),
   ];
 
@@ -846,6 +851,18 @@ const AdminDashboard: React.FC = () => {
 
           {/* ── Admin Users ── */}
           <Route path="/users" element={<AdminUsersPage />} />
+
+          {/* ── Students ── */}
+          <Route path="/students" element={<AdminStudentsPage />} />
+
+          {/* ── Staff / Lecturers ── */}
+          <Route path="/staff" element={<AdminStaffPage />} />
+
+          {/* ── Announcements ── */}
+          <Route path="/announcements" element={<AdminAnnouncementsPage />} />
+
+          {/* ── Student Portal Admin ── */}
+          <Route path="/portal-management" element={<StudentPortalAdmin />} />
 
           {/* ── Manual Enrolments (super_admin only) ── */}
           <Route path="/enrolments" element={<ManualEnrolmentPage />} />
@@ -1918,6 +1935,355 @@ const ManualEnrolmentPage: React.FC = () => {
           )}
         </div>
       </div>
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════════════════════
+   Admin Students Page
+   ══════════════════════════════════════════════════════════ */
+const AdminStudentsPage: React.FC = () => {
+  const [students, setStudents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
+
+  const fetchStudents = useCallback(async (page = 1) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(page), limit: '50' });
+      if (search) params.append('search', search);
+      const res = await fetch(`${API}/api/admin/students?${params}`, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.success) {
+        setStudents(data.students);
+        setPagination(data.pagination);
+      }
+    } catch {} finally { setLoading(false); }
+  }, [search]);
+
+  useEffect(() => { fetchStudents(); }, [fetchStudents]);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary)' }}>Students</h2>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{pagination.total} registered students</p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <input
+            type="text" placeholder="Search by ID, name, or email..."
+            value={search} onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && fetchStudents()}
+            style={{ padding: '0.4rem 0.75rem', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', width: '240px' }}
+          />
+          <button onClick={() => fetchStudents()} className="btn btn-primary btn-sm">Search</button>
+        </div>
+      </div>
+
+      {loading ? (
+        <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
+      ) : students.length === 0 ? (
+        <div className="card"><p style={{ color: 'var(--text-muted)' }}>No students found. Students are created when applications are approved.</p></div>
+      ) : (
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Student ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Programme</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Last Login</th>
+              </tr>
+            </thead>
+            <tbody>
+              {students.map((s: any) => (
+                <tr key={s.student_id}>
+                  <td><strong>{s.student_id}</strong></td>
+                  <td>{s.first_name} {s.last_name}</td>
+                  <td style={{ fontSize: '0.8rem' }}>{s.email}</td>
+                  <td style={{ fontSize: '0.8rem' }}>{s.programme_label || '—'}</td>
+                  <td><span className={`badge ${s.application_type === 'topup' ? 'badge-warning' : 'badge-info'}`}>{s.application_type === 'topup' ? 'Top-Up' : 'Regular'}</span></td>
+                  <td><span className={`badge ${s.status === 'active' ? 'badge-success' : 'badge-danger'}`}>{s.status}</span></td>
+                  <td style={{ fontSize: '0.8rem' }}>{s.last_login ? fmtDate(s.last_login) : 'Never'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {pagination.pages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', marginTop: '1rem' }}>
+          {Array.from({ length: pagination.pages }, (_, i) => (
+            <button key={i} onClick={() => fetchStudents(i + 1)}
+              className={`btn btn-sm ${pagination.page === i + 1 ? 'btn-primary' : 'btn-ghost'}`}
+            >{i + 1}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════════════════════
+   Admin Staff / Lecturer Enrolment Page
+   ══════════════════════════════════════════════════════════ */
+const AdminStaffPage: React.FC = () => {
+  const [staff, setStaff] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', department: '', title: 'Mr.', role: 'lecturer' });
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
+
+  const fetchStaff = useCallback(async (page = 1) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(page), limit: '50' });
+      if (search) params.append('search', search);
+      const res = await fetch(`${API}/api/admin/staff?${params}`, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.success) { setStaff(data.staff); setPagination(data.pagination); }
+    } catch {} finally { setLoading(false); }
+  }, [search]);
+
+  useEffect(() => { fetchStaff(); }, [fetchStaff]);
+
+  const handleEnrol = async (e: React.FormEvent) => {
+    e.preventDefault(); setSaving(true); setMsg('');
+    try {
+      const res = await fetch(`${API}/api/admin/staff`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(form) });
+      const data = await res.json();
+      if (data.success) {
+        setMsg(`Staff enrolled: ${data.staffId}. Setup link sent to ${form.email}.`);
+        setForm({ firstName: '', lastName: '', email: '', phone: '', department: '', title: 'Mr.', role: 'lecturer' });
+        setShowForm(false); fetchStaff();
+      } else { setMsg(data.message || 'Enrolment failed'); }
+    } catch { setMsg('Network error'); }
+    finally { setSaving(false); }
+  };
+
+  const handleToggle = async (id: string) => {
+    await fetch(`${API}/api/admin/staff/${id}/toggle`, { method: 'POST', headers: authHeaders() });
+    fetchStaff();
+  };
+
+  const handleResend = async (id: string) => {
+    const res = await fetch(`${API}/api/admin/staff/${id}/resend`, { method: 'POST', headers: authHeaders() });
+    const data = await res.json();
+    if (data.success) alert(data.message);
+    else alert(data.message || 'Failed');
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary)' }}>Staff & Lecturers</h2>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{pagination.total} enrolled staff members</p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <input type="text" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchStaff()}
+            style={{ padding: '0.4rem 0.75rem', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', width: '180px' }} />
+          <button onClick={() => fetchStaff()} className="btn btn-ghost btn-sm">Search</button>
+          <button onClick={() => setShowForm(!showForm)} className="btn btn-primary btn-sm">{showForm ? 'Cancel' : '+ Enrol Staff'}</button>
+        </div>
+      </div>
+
+      {msg && <div className={`alert ${msg.includes('enrolled') ? 'alert-success' : 'alert-error'}`} style={{ marginBottom: '1rem' }}>{msg}</div>}
+
+      {showForm && (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <h3 className="section-title">Enrol New Staff / Lecturer</h3>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>A unique Staff ID will be generated and a setup link emailed + SMS'd to the new staff member.</p>
+          <form onSubmit={handleEnrol}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+              <div className="form-group"><label>Title</label><select value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}>
+                <option value="Mr.">Mr.</option><option value="Mrs.">Mrs.</option><option value="Ms.">Ms.</option><option value="Dr.">Dr.</option><option value="Prof.">Prof.</option><option value="Rev.">Rev.</option>
+              </select></div>
+              <div className="form-group"><label>First Name *</label><input type="text" value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} required /></div>
+              <div className="form-group"><label>Last Name *</label><input type="text" value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} required /></div>
+              <div className="form-group"><label>Email *</label><input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required /></div>
+              <div className="form-group"><label>Phone *</label><input type="text" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} required placeholder="+233..." /></div>
+              <div className="form-group"><label>Department *</label><input type="text" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))} required placeholder="e.g. Nursing Sciences" /></div>
+              <div className="form-group"><label>Role</label><select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+                <option value="lecturer">Lecturer</option><option value="staff">Staff</option>
+              </select></div>
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={saving} style={{ marginTop: '0.5rem' }}>{saving ? 'Enrolling...' : 'Enrol & Send Setup Link'}</button>
+          </form>
+        </div>
+      )}
+
+      {loading ? <p style={{ color: 'var(--text-muted)' }}>Loading...</p> : staff.length === 0 ? (
+        <div className="card"><p style={{ color: 'var(--text-muted)' }}>No staff enrolled yet. Click "Enrol Staff" to add lecturers and staff members.</p></div>
+      ) : (
+        <div className="table-wrap"><table className="data-table"><thead><tr>
+          <th>Staff ID</th><th>Name</th><th>Email</th><th>Department</th><th>Status</th><th>Last Login</th><th>Actions</th>
+        </tr></thead><tbody>
+          {staff.map((s: any) => (
+            <tr key={s.id}>
+              <td><strong>{s.staff_id}</strong></td>
+              <td>{s.title} {s.first_name} {s.last_name}</td>
+              <td style={{ fontSize: '0.8rem' }}>{s.email}</td>
+              <td style={{ fontSize: '0.8rem' }}>{s.department}</td>
+              <td><span className={`badge ${s.is_active ? 'badge-success' : 'badge-danger'}`}>{s.is_active ? 'Active' : 'Inactive'}</span></td>
+              <td style={{ fontSize: '0.8rem' }}>{s.last_login ? fmtDate(s.last_login) : 'Never'}</td>
+              <td>
+                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                  <button onClick={() => handleToggle(s.id)} className="btn btn-ghost btn-sm" style={{ fontSize: '0.75rem' }}>{s.is_active ? 'Disable' : 'Enable'}</button>
+                  <button onClick={() => handleResend(s.id)} className="btn btn-ghost btn-sm" style={{ fontSize: '0.75rem' }}>Resend Link</button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody></table></div>
+      )}
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════════════════════
+   Admin Announcements Page
+   ══════════════════════════════════════════════════════════ */
+const AdminAnnouncementsPage: React.FC = () => {
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ title: '', content: '', priority: 'normal', target: 'all' });
+  const [saving, setSaving] = useState(false);
+
+  const fetchAnnouncements = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/api/admin/announcements`, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.success) setAnnouncements(data.announcements);
+    } catch {} finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchAnnouncements(); }, [fetchAnnouncements]);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/api/admin/announcements`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setForm({ title: '', content: '', priority: 'normal', target: 'all' });
+        setShowForm(false);
+        fetchAnnouncements();
+      }
+    } catch {} finally { setSaving(false); }
+  };
+
+  const toggleActive = async (id: string, isActive: boolean) => {
+    await fetch(`${API}/api/admin/announcements/${id}`, {
+      method: 'PUT', headers: authHeaders(), body: JSON.stringify({ isActive: !isActive }),
+    });
+    fetchAnnouncements();
+  };
+
+  const deleteAnnouncement = async (id: string) => {
+    if (!window.confirm('Delete this announcement?')) return;
+    await fetch(`${API}/api/admin/announcements/${id}`, { method: 'DELETE', headers: authHeaders() });
+    fetchAnnouncements();
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <div>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary)' }}>Announcements</h2>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Manage announcements shown on the Student Portal</p>
+        </div>
+        <button onClick={() => setShowForm(!showForm)} className="btn btn-primary btn-sm">
+          {showForm ? 'Cancel' : '+ New Announcement'}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="card" style={{ marginBottom: '1.25rem' }}>
+          <h3 className="section-title">New Announcement</h3>
+          <form onSubmit={handleCreate}>
+            <div className="form-group">
+              <label>Title *</label>
+              <input type="text" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required />
+            </div>
+            <div className="form-group">
+              <label>Content *</label>
+              <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} required rows={3}
+                style={{ width: '100%', padding: '0.5rem', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: '0.875rem', resize: 'vertical' }} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="form-group">
+                <label>Priority</label>
+                <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
+                  <option value="normal">Normal</option>
+                  <option value="important">Important</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Target</label>
+                <select value={form.target} onChange={e => setForm(f => ({ ...f, target: e.target.value }))}>
+                  <option value="all">All Students</option>
+                  <option value="regular">Regular Only</option>
+                  <option value="topup">Top-Up Only</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? 'Creating...' : 'Create Announcement'}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {loading ? (
+        <p style={{ color: 'var(--text-muted)' }}>Loading...</p>
+      ) : announcements.length === 0 ? (
+        <div className="card"><p style={{ color: 'var(--text-muted)' }}>No announcements yet. Click "New Announcement" to create one.</p></div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {announcements.map((a: any) => (
+            <div key={a.id} className="card" style={{ margin: 0, opacity: a.is_active ? 1 : 0.5 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.375rem' }}>
+                    <strong style={{ fontSize: '0.95rem' }}>{a.title}</strong>
+                    <span className={`badge ${a.priority === 'urgent' ? 'badge-danger' : a.priority === 'important' ? 'badge-warning' : 'badge-neutral'}`}>{a.priority}</span>
+                    <span className="badge badge-info">{a.target}</span>
+                    {!a.is_active && <span className="badge badge-neutral">Hidden</span>}
+                  </div>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0' }}>{a.content}</p>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    {fmtDate(a.created_at)} · by {a.created_by_name || 'admin'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '0.375rem', flexShrink: 0 }}>
+                  <button onClick={() => toggleActive(a.id, a.is_active)} className="btn btn-ghost btn-sm">
+                    {a.is_active ? 'Hide' : 'Show'}
+                  </button>
+                  <button onClick={() => deleteAnnouncement(a.id)} className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }}>
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

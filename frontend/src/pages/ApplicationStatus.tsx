@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import Footer from '../components/Footer';
 
 const ApplicationStatus: React.FC = () => {
   const [searchType, setSearchType] = useState('application');
@@ -168,6 +169,7 @@ const ApplicationStatus: React.FC = () => {
           );
         })()}
       </div>
+      <Footer />
     </div>
   );
 };

@@ -3,6 +3,7 @@ const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticateAdmin } = require('../middleware/auth');
+const { pool } = require('../config/database');
 const {
   getAllApplications, getApplicationDetail, approveApplication, rejectApplication,
   bulkAction, updateNotes, emailApplicant, regenerateLetter,
@@ -121,5 +122,227 @@ router.post('/enrolments/manual', [
   body('programmeId').trim().notEmpty().withMessage('Programme required'),
   body('programmeLabel').trim().notEmpty().withMessage('Programme label required'),
 ], validate, manualEnrol);
+
+/* Students Management */
+router.get('/students', async (req, res, next) => {
+  try {
+    const { search, page = 1, limit = 50 } = req.query;
+    const where = [];
+    const params = [];
+    let idx = 1;
+    if (search) {
+      where.push(`(s.student_id ILIKE $${idx} OR s.first_name ILIKE $${idx} OR s.last_name ILIKE $${idx} OR s.email ILIKE $${idx})`);
+      params.push(`%${search}%`); idx++;
+    }
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const offset = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
+    const countResult = await pool.query(`SELECT COUNT(*) FROM students s ${whereClause}`, params);
+    const total = parseInt(countResult.rows[0].count);
+    const result = await pool.query(
+      `SELECT s.student_id, s.first_name, s.last_name, s.email, s.phone,
+              s.programme_label, s.enrollment_option, s.application_type,
+              s.status, s.last_login, s.created_at
+       FROM students s ${whereClause}
+       ORDER BY s.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+      [...params, parseInt(limit), offset]
+    );
+    res.json({ success: true, students: result.rows, pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) } });
+  } catch (error) { next(error); }
+});
+
+/* Announcements */
+router.get('/announcements', async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      `SELECT a.*, au.username as created_by_name FROM announcements a
+       LEFT JOIN admin_users au ON au.id = a.created_by
+       ORDER BY a.created_at DESC`
+    );
+    res.json({ success: true, announcements: result.rows });
+  } catch (error) { next(error); }
+});
+
+router.post('/announcements', [
+  body('title').trim().notEmpty().withMessage('Title required'),
+  body('content').trim().notEmpty().withMessage('Content required'),
+  body('priority').optional().isIn(['normal', 'important', 'urgent']),
+  body('target').optional().isIn(['all', 'regular', 'topup']),
+], validate, async (req, res, next) => {
+  const { title, content, priority = 'normal', target = 'all' } = req.body;
+  try {
+    await pool.query(
+      `INSERT INTO announcements (title, content, priority, target, created_by) VALUES ($1,$2,$3,$4,$5)`,
+      [title, content, priority, target, req.admin?.adminId || null]
+    );
+    res.status(201).json({ success: true, message: 'Announcement created' });
+  } catch (error) { next(error); }
+});
+
+router.put('/announcements/:id', async (req, res, next) => {
+  const { title, content, priority, target, isActive } = req.body;
+  try {
+    await pool.query(
+      `UPDATE announcements SET title=COALESCE($1,title), content=COALESCE($2,content),
+       priority=COALESCE($3,priority), target=COALESCE($4,target),
+       is_active=COALESCE($5,is_active), updated_at=NOW() WHERE id=$6`,
+      [title || null, content || null, priority || null, target || null, isActive, req.params.id]
+    );
+    res.json({ success: true, message: 'Announcement updated' });
+  } catch (error) { next(error); }
+});
+
+router.delete('/announcements/:id', async (req, res, next) => {
+  try {
+    await pool.query('DELETE FROM announcements WHERE id=$1', [req.params.id]);
+    res.json({ success: true, message: 'Announcement deleted' });
+  } catch (error) { next(error); }
+});
+
+/* ══════════════════════════════════════════════════════════
+   STAFF / LECTURER ENROLMENT
+   ══════════════════════════════════════════════════════════ */
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const { sendEmail, emailTemplate } = require('../services/emailService');
+const { sendSMS } = require('../services/smsService');
+
+// Generate unique staff ID: WUC/STF/001 or WUC/LEC/001
+async function generateStaffId(role) {
+  const prefix = role === 'lecturer' ? 'LEC' : 'STF';
+  const countResult = await pool.query(
+    `SELECT COUNT(*) FROM lecturers WHERE staff_id LIKE $1`,
+    [`WUC/${prefix}/%`]
+  );
+  const seq = (parseInt(countResult.rows[0].count) + 1).toString().padStart(3, '0');
+  return `WUC/${prefix}/${seq}`;
+}
+
+/* GET /api/admin/staff — list all staff/lecturers */
+router.get('/staff', async (req, res, next) => {
+  try {
+    const { search, page = 1, limit = 50 } = req.query;
+    const where = [];
+    const params = [];
+    let idx = 1;
+    if (search) {
+      where.push(`(staff_id ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR email ILIKE $${idx})`);
+      params.push(`%${search}%`); idx++;
+    }
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const offset = (Math.max(1, parseInt(page)) - 1) * parseInt(limit);
+    const countResult = await pool.query(`SELECT COUNT(*) FROM lecturers ${whereClause}`, params);
+    const total = parseInt(countResult.rows[0].count);
+    const result = await pool.query(
+      `SELECT id, staff_id, first_name, last_name, email, phone, department, title, is_active, last_login, created_at
+       FROM lecturers ${whereClause} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+      [...params, parseInt(limit), offset]
+    );
+    res.json({ success: true, staff: result.rows, pagination: { total, page: parseInt(page), limit: parseInt(limit), pages: Math.ceil(total / parseInt(limit)) } });
+  } catch (error) { next(error); }
+});
+
+/* POST /api/admin/staff — enrol new staff/lecturer */
+router.post('/staff', [
+  body('firstName').trim().notEmpty().withMessage('First name required'),
+  body('lastName').trim().notEmpty().withMessage('Last name required'),
+  body('email').isEmail().withMessage('Valid email required'),
+  body('phone').trim().notEmpty().withMessage('Phone required'),
+  body('department').trim().notEmpty().withMessage('Department required'),
+  body('title').optional().trim(),
+  body('role').optional().isIn(['lecturer', 'staff']),
+], validate, async (req, res, next) => {
+  const { firstName, lastName, email, phone, department, title, role = 'lecturer' } = req.body;
+  try {
+    // Check if email already exists
+    const existing = await pool.query('SELECT id FROM lecturers WHERE email = $1', [email]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ success: false, message: 'A staff member with this email already exists' });
+    }
+
+    // Generate staff ID
+    const staffId = await generateStaffId(role);
+
+    // Generate a setup token (they will create their own password)
+    const setupToken = crypto.randomBytes(32).toString('hex');
+    const setupExpires = new Date(Date.now() + 72 * 60 * 60 * 1000); // 72 hours
+
+    // Create with a random temporary password hash (they can't login until they set their password)
+    const tempHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+
+    await pool.query(
+      `INSERT INTO lecturers (staff_id, first_name, last_name, email, phone, department, title, password_hash, reset_token, reset_token_expires)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [staffId, firstName, lastName, email, phone, department, title || (role === 'lecturer' ? 'Mr.' : 'Mr.'), tempHash, setupToken, setupExpires]
+    );
+
+    // Send email with setup link
+    const setupUrl = `${process.env.APP_URL || 'http://localhost:3000'}/lecturer/setup-password?token=${setupToken}&staffId=${encodeURIComponent(staffId)}`;
+    const emailContent = `
+      <h2>Welcome to Withrow University College</h2>
+      <p>Dear ${title || 'Mr./Ms.'} ${firstName} ${lastName},</p>
+      <p>You have been enrolled as <strong>${role === 'lecturer' ? 'a Lecturer' : 'Staff'}</strong> at Withrow University College.</p>
+      <div style="background: #f0f4f8; border: 2px solid #003366; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
+        <p style="margin: 0 0 10px 0; font-size: 14px; color: #666;">Your Staff ID</p>
+        <p style="margin: 0; font-size: 24px; font-weight: bold; color: #003366;">${staffId}</p>
+      </div>
+      <p>Please click the button below to set up your password and activate your account. This link expires in 72 hours.</p>
+      <p style="text-align: center;">
+        <a href="${setupUrl}" class="button">Set Up Your Password</a>
+      </p>
+      <p><strong>Department:</strong> ${department}</p>
+      <p>Once your password is set, you can log in at the Lecturer Portal to manage courses, upload grades, and more.</p>
+      <p>Best regards,<br><strong>WUC Administration</strong></p>
+    `;
+    sendEmail(email, `Welcome to WUC — Staff ID: ${staffId}`, emailTemplate(emailContent)).catch(() => {});
+
+    // Send SMS
+    const smsMsg = `WUC Staff Enrolment: Your Staff ID is ${staffId}. Check your email (${email}) for a link to set your password and activate your account. Portal: ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/lecturer/login`;
+    sendSMS(phone, smsMsg).catch(() => {});
+
+    res.status(201).json({
+      success: true,
+      message: `Staff enrolled successfully. Setup link sent to ${email} and SMS to ${phone}.`,
+      staffId,
+    });
+  } catch (error) {
+    if (error.code === '23505') return res.status(400).json({ success: false, message: 'Staff ID or email already exists' });
+    next(error);
+  }
+});
+
+/* POST /api/admin/staff/:id/toggle — activate/deactivate */
+router.post('/staff/:id/toggle', async (req, res, next) => {
+  try {
+    await pool.query('UPDATE lecturers SET is_active = NOT is_active WHERE id = $1', [req.params.id]);
+    res.json({ success: true, message: 'Staff status updated' });
+  } catch (error) { next(error); }
+});
+
+/* POST /api/admin/staff/:id/resend — resend setup email */
+router.post('/staff/:id/resend', async (req, res, next) => {
+  try {
+    const result = await pool.query('SELECT * FROM lecturers WHERE id = $1', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Staff not found' });
+    const staff = result.rows[0];
+
+    const setupToken = crypto.randomBytes(32).toString('hex');
+    const setupExpires = new Date(Date.now() + 72 * 60 * 60 * 1000);
+    await pool.query('UPDATE lecturers SET reset_token = $1, reset_token_expires = $2 WHERE id = $3', [setupToken, setupExpires, staff.id]);
+
+    const setupUrl = `${process.env.APP_URL || 'http://localhost:3000'}/lecturer/setup-password?token=${setupToken}&staffId=${encodeURIComponent(staff.staff_id)}`;
+    const emailContent = `
+      <h2>Password Setup Reminder</h2>
+      <p>Dear ${staff.title} ${staff.first_name},</p>
+      <p>Your Staff ID is: <strong>${staff.staff_id}</strong></p>
+      <p>Please click below to set up your password. This link expires in 72 hours.</p>
+      <p style="text-align: center;"><a href="${setupUrl}" class="button">Set Up Password</a></p>
+      <p>Best regards,<br><strong>WUC Administration</strong></p>
+    `;
+    sendEmail(staff.email, `WUC — Set Up Your Password [${staff.staff_id}]`, emailTemplate(emailContent)).catch(() => {});
+    sendSMS(staff.phone, `WUC: A new password setup link has been sent to your email (${staff.email}). Staff ID: ${staff.staff_id}`).catch(() => {});
+
+    res.json({ success: true, message: `Setup link resent to ${staff.email}` });
+  } catch (error) { next(error); }
+});
 
 module.exports = router;
