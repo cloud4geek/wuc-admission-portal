@@ -54,8 +54,8 @@ router.post('/webhook/paystack', async (req, res) => {
     const secret = process.env.PAYSTACK_SECRET_KEY;
     if (!secret) return res.sendStatus(200);
 
-    // Verify Paystack signature using the raw body string
-    const rawBody = JSON.stringify(req.body);
+    // Verify Paystack signature using the raw request body bytes
+    const rawBody = req.rawBody || Buffer.from(JSON.stringify(req.body));
     const hash = crypto
       .createHmac('sha512', secret)
       .update(rawBody)
@@ -97,8 +97,8 @@ router.post('/webhook/paystack', async (req, res) => {
       const paymentMethod = methodField?.value || 'mobile_money';
 
       await pool.query(
-        `INSERT INTO vouchers (voucher_code, first_name, last_name, email, phone, payment_method, payment_reference, amount, expires_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        `INSERT INTO vouchers (id, voucher_code, first_name, last_name, email, phone, payment_method, payment_reference, amount, expires_at)
+         VALUES (gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8,$9)`,
         [voucherCode, firstName, lastName, email || '', phone, paymentMethod, reference, amount, expiresAt]
       );
 
@@ -111,7 +111,7 @@ router.post('/webhook/paystack', async (req, res) => {
 
     res.sendStatus(200);
   } catch (error) {
-    logger.error('Paystack webhook error', { error: error.message });
+    logger.error('Paystack webhook error', { error: error.message, stack: error.stack });
     res.sendStatus(200); // Always respond 200 to prevent Paystack from retrying
   }
 });

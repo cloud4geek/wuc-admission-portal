@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -36,6 +36,8 @@ app.set('trust proxy', 1);
 /* ── Rate Limiting ── */
 const isDev = process.env.NODE_ENV === 'development';
 
+// Exempt Paystack webhook from rate limiting
+app.use('/api/vouchers/webhook', (req, res, next) => next());
 app.use('/api/', rateLimit({
   windowMs: 15 * 60 * 1000, max: isDev ? 1000 : 200,
   standardHeaders: true, legacyHeaders: false,
@@ -61,7 +63,12 @@ const submitLimiter = rateLimit({
 });
 
 /* ── Body parsing & static files ── */
-app.use(express.json({ limit: '2mb' }));
+/* -- Raw body capture for Paystack webhook signature verification -- */
+/* Uses express.json verify callback so body is parsed AND rawBody is available */
+app.use(express.json({
+  limit: '2mb',
+  verify: (req, res, buf) => { req.rawBody = buf; }
+}));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // Public files — admission letters and application forms (shared with applicants)
@@ -124,7 +131,7 @@ app.get('/api/health', async (req, res) => {
 
 app.use(errorHandler);
 
-app.listen(PORT, async () => {
+app.listen(PORT, '127.0.0.1', async () => {
   await autoMigrate();
   logger.info(`WUC API running on port ${PORT} [${process.env.NODE_ENV}]`);
   logger.info(`CORS origins: ${allowedOrigins.join(', ')}`);
