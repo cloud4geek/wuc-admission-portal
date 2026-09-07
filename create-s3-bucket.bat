@@ -2,8 +2,8 @@
 echo Creating S3 bucket for WUC Admission Portal...
 
 REM Set AWS credentials as environment variables
-set AWS_ACCESS_KEY_ID=AKIAWRU6VR7OUXBKDQNL
-set AWS_SECRET_ACCESS_KEY=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
+set AWS_ACCESS_KEY_ID=%AWS_ACCESS_KEY_ID%
+set AWS_SECRET_ACCESS_KEY=%AWS_SECRET_ACCESS_KEY%
 set AWS_DEFAULT_REGION=us-east-1
 
 REM Create S3 bucket

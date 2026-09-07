@@ -63,9 +63,40 @@ const ApplicationForm: React.FC = () => {
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [photoError, setPhotoError] = useState('');
+  const [verifyingVoucher, setVerifyingVoucher] = useState(false);
+  const [voucherError, setVoucherError] = useState('');
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+
+  // ── Verify voucher against the backend before unlocking the form ──
+  const handleVerifyVoucher = async () => {
+    const code = draft.voucherCode.trim();
+    setVoucherError('');
+    if (!code) {
+      setVoucherError('Please enter your voucher code.');
+      return;
+    }
+    setVerifyingVoucher(true);
+    try {
+      const res = await fetch(`${API}/api/vouchers/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voucherCode: code }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        // Valid voucher — advance to the personal details step
+        set({ step: 2 });
+      } else {
+        setVoucherError(data.message || 'Invalid voucher code.');
+      }
+    } catch {
+      setVoucherError('Could not verify voucher. Check your connection and try again.');
+    } finally {
+      setVerifyingVoucher(false);
+    }
+  };
 
   // ── Load draft on mount ──
   useEffect(() => {
@@ -383,10 +414,9 @@ const ApplicationForm: React.FC = () => {
       <header className="header">
         <div className="header-content">
           <div className="logo-section">
-            <img src="http://wuc.edu.gh/wp-content/uploads/2025/05/WC-logo-on-white-1.jpg" alt="WUC Logo" />
+            <img src="http://wuc.edu.gh/wp-content/uploads/2023/08/Withrow-Logo-scaled.jpg" alt="Withrow University College" style={{ height: '54px', width: 'auto', borderRadius: '8px', objectFit: 'contain' }} />
             <div>
-              <h1>Withrow University College</h1>
-              <span className="logo-sub">Agona-Asamang · Admission Portal</span>
+              <span className="logo-sub">Admission Portal</span>
             </div>
           </div>
           <nav>
@@ -451,12 +481,17 @@ const ApplicationForm: React.FC = () => {
               <div className="form-group">
                 <label>Voucher Code *</label>
                 <input type="text" value={draft.voucherCode}
-                  onChange={e => set({ voucherCode: e.target.value.toUpperCase() })}
+                  onChange={e => { set({ voucherCode: e.target.value.toUpperCase() }); if (voucherError) setVoucherError(''); }}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleVerifyVoucher(); } }}
                   placeholder="e.g. WUC12345678" required
+                  disabled={verifyingVoucher}
                   style={{ fontFamily: 'monospace', letterSpacing: '0.08em', fontSize: '1.05rem' }} />
+                {voucherError && (
+                  <p style={{ color: '#dc2626', fontSize: '0.875rem', marginTop: '0.5rem' }}>{voucherError}</p>
+                )}
               </div>
-              <button type="button" onClick={() => draft.voucherCode.trim() && set({ step: 2 })} className="btn btn-primary">
-                Continue →
+              <button type="button" onClick={handleVerifyVoucher} disabled={verifyingVoucher} className="btn btn-primary">
+                {verifyingVoucher ? 'Verifying…' : 'Continue →'}
               </button>
             </div>
           )}

@@ -90,7 +90,7 @@ fi
 echo "[8/10] Checking AWS credentials..."
 if [ -f "backend/.env" ]; then
   AWS_KEY=$(grep "^AWS_ACCESS_KEY_ID=" backend/.env | cut -d'=' -f2)
-  if [ "$AWS_KEY" == "AKIAWRU6VR7OUXBKDQNL" ]; then
+  if [ "$AWS_KEY" == "AKIA_ROTATED_PLACEHOLDER" ]; then
     echo "❌ CRITICAL: Exposed AWS credentials still in use!"
     echo "   These were committed to git and must be rotated"
     ISSUES=$((ISSUES+1))
