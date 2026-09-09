@@ -20,11 +20,6 @@ function drawQRBottomRight(doc, qrBuffer, W, M) {
   const y = doc.page.height - M - qrSize - labelH;
   try {
     doc.image(qrBuffer, x, y, { fit: [qrSize, qrSize] });
-    doc.font('Helvetica').fontSize(6.5).fillColor('#555')
-      .text('Scan to verify authenticity', x - 20, y + qrSize + 2, {
-        width: qrSize + 40,
-        align: 'center',
-      });
   } catch (e) {
     console.log('    [qr] draw error:', e.message);
   }
