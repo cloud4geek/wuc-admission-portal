@@ -4,8 +4,32 @@ const fs = require('fs');
 const path = require('path');
 const { pool } = require('../config/database');
 const { amountToWords, fmtGHS } = require('../utils/amountToWords');
+const { generateLetterQR } = require('../qr-util');
 
-// Font paths — Arial supports the Ghana Cedi ₵ symbol
+/**
+ * Draw the verification QR code at the bottom-right of the current page.
+ * qrBuffer is a PNG Buffer (or null if QR generation failed).
+ */
+function drawQRBottomRight(doc, qrBuffer, W, M) {
+  if (!qrBuffer) return;
+  const qrSize = 90;
+  const labelH = 12;
+  const x = W - M - qrSize;
+  // Sit above the bottom margin/footer strip
+  const y = doc.page.height - M - qrSize - labelH;
+  try {
+    doc.image(qrBuffer, x, y, { fit: [qrSize, qrSize] });
+    doc.font('Helvetica').fontSize(6.5).fillColor('#555')
+      .text('Scan to verify authenticity', x - 20, y + qrSize + 2, {
+        width: qrSize + 40,
+        align: 'center',
+      });
+  } catch (e) {
+    console.log('    [qr] draw error:', e.message);
+  }
+}
+
+// Font paths — Arial supports the Ghana Cedi GHS symbol
 const FONT_REGULAR = 'C:\\Windows\\Fonts\\arial.ttf';
 const FONT_BOLD    = 'C:\\Windows\\Fonts\\arialbd.ttf';
 const USE_ARIAL    = fs.existsSync(FONT_REGULAR) && fs.existsSync(FONT_BOLD);
@@ -236,11 +260,11 @@ function buildLetterLines(app, choices, fees, registrar) {
   };
 }
 
-function writeBodyOnDoc(doc, app, choices, fees, photoPath, startY, M, W, registrar) {
+function writeBodyOnDoc(doc, app, choices, fees, photoPath, startY, M, W, registrar, qrBuffer) {
   const d = buildLetterLines(app, choices, fees, registrar);
   const black = '#1a1a1a', grey = '#555', navy = '#0a2240';
 
-  // Register Arial if available (supports ₵)
+  // Register Arial if available (supports GHS)
   if (USE_ARIAL) {
     try {
       doc.registerFont('Body', FONT_REGULAR);
@@ -263,13 +287,13 @@ function writeBodyOnDoc(doc, app, choices, fees, photoPath, startY, M, W, regist
 
   const textW = photoPath ? (photoX - M - 12) : (W - 2 * M);
 
-  // ── Date ──
+  // ── Date — aligned to the extreme right ──
   doc.font(fReg).fontSize(10).fillColor(black);
-  doc.text(d.dateStr, M, contentY, { width: textW });
+  doc.text(d.dateStr, M, contentY, { width: textW, align: 'right' });
   doc.moveDown(0.4);
 
-  // ── Reference number ──
-  doc.text(`Reference no: ${app.application_id}`, { width: textW });
+  // ── Reference number (left-aligned, back to normal flow) ──
+  doc.text(`Reference no: ${app.application_id}`, M, doc.y, { width: textW, align: 'left' });
   doc.moveDown(0.5);
 
   // ── Applicant name (title + name, no duplication) ──
@@ -379,6 +403,9 @@ function writeBodyOnDoc(doc, app, choices, fees, photoPath, startY, M, W, regist
   doc.moveDown(0.2);
   doc.font(fBold).fontSize(10).fillColor(navy).text(registrar.name);
   doc.font(fReg).fontSize(9).fillColor(grey).text(`(${registrar.title})`);
+
+  // ── Verification QR code — bottom-right of the page ──
+  drawQRBottomRight(doc, qrBuffer, W, M);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -390,12 +417,16 @@ async function generateWithPdfBackground(app, choices, fees, photoPath, bg, regi
   const finalPath = path.join(LETTERS_DIR, `${appId}.pdf`);
   const rel = `uploads/admission-letters/${appId}.pdf`;
 
+  // Verification QR (bottom-right)
+  let qrBuffer = null;
+  try { qrBuffer = await generateLetterQR(appId); } catch (e) { console.log('    [qr] gen error:', e.message); }
+
   // Step 1: Generate the letter body as a standalone PDF using PDFKit
   await new Promise((resolve, reject) => {
     const doc = new PDFDocumentKit({ size: 'A4', margin: 0 });
     const stream = fs.createWriteStream(tmpPath);
     doc.pipe(stream);
-    writeBodyOnDoc(doc, app, choices, fees, photoPath, bg.contentStartY, 60, doc.page.width, registrar);
+    writeBodyOnDoc(doc, app, choices, fees, photoPath, bg.contentStartY, 60, doc.page.width, registrar, qrBuffer);
     doc.end();
     stream.on('finish', resolve);
     stream.on('error', reject);
@@ -437,6 +468,10 @@ async function generateWithImageBackground(app, choices, fees, photoPath, bg, re
   const filePath = path.join(LETTERS_DIR, `${appId}.pdf`);
   const rel = `uploads/admission-letters/${appId}.pdf`;
 
+  // Verification QR (bottom-right)
+  let qrBuffer = null;
+  try { qrBuffer = await generateLetterQR(appId); } catch (e) { console.log('    [qr] gen error:', e.message); }
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocumentKit({ size: 'A4', margin: 0 });
@@ -453,7 +488,7 @@ async function generateWithImageBackground(app, choices, fees, photoPath, bg, re
         console.error(`    [image-bg] Failed: ${e.message}`);
       }
 
-      writeBodyOnDoc(doc, app, choices, fees, photoPath, bg.contentStartY, 60, W, registrar);
+      writeBodyOnDoc(doc, app, choices, fees, photoPath, bg.contentStartY, 60, W, registrar, qrBuffer);
 
       doc.end();
       stream.on('finish', () => { console.log(`    [image-bg] Written: ${rel}`); resolve(rel); });
@@ -470,6 +505,10 @@ async function generateFromCode(app, choices, fees, photoPath, registrar) {
   const appId = app.application_id;
   const filePath = path.join(LETTERS_DIR, `${appId}.pdf`);
   const rel = `uploads/admission-letters/${appId}.pdf`;
+
+  // Verification QR (bottom-right)
+  let qrBuffer = null;
+  try { qrBuffer = await generateLetterQR(appId); } catch (e) { console.log('    [qr] gen error:', e.message); }
 
   return new Promise((resolve, reject) => {
     try {
@@ -495,7 +534,7 @@ async function generateFromCode(app, choices, fees, photoPath, registrar) {
       doc.moveTo(M, doc.y).lineTo(W - M, doc.y).lineWidth(1).strokeColor(gold).stroke();
       doc.moveDown(0.6);
 
-      writeBodyOnDoc(doc, app, choices, fees, photoPath, doc.y, M, W, registrar);
+      writeBodyOnDoc(doc, app, choices, fees, photoPath, doc.y, M, W, registrar, qrBuffer);
 
       doc.rect(0, doc.page.height - 5, W, 5).fill(gold);
       doc.end();
