@@ -5,6 +5,7 @@ const path = require('path');
 const { pool } = require('../config/database');
 const { amountToWords, fmtGHS } = require('../utils/amountToWords');
 const { generateLetterQR } = require('../qr-util');
+const { getOrCreateReferenceNo } = require('../referenceNo');
 
 /**
  * Draw the verification QR code at the bottom-right of the current page.
@@ -287,20 +288,33 @@ function writeBodyOnDoc(doc, app, choices, fees, photoPath, startY, M, W, regist
 
   const textW = photoPath ? (photoX - M - 12) : (W - 2 * M);
 
-  // ── Date — aligned to the extreme right ──
-  doc.font(fReg).fontSize(10).fillColor(black);
-  doc.text(d.dateStr, M, contentY, { width: textW, align: 'right' });
+  // ── Date — aligned to the extreme right, UPPERCASE and BOLD ──
+  doc.font(fBold).fontSize(10).fillColor(black);
+  doc.text(String(d.dateStr).toUpperCase(), M, contentY, { width: textW, align: 'right' });
   doc.moveDown(0.4);
 
   // ── Reference number (left-aligned, back to normal flow) ──
-  doc.text(`Reference no: ${app.application_id}`, M, doc.y, { width: textW, align: 'left' });
+  doc.text(`Reference no: ${app.reference_no || app.application_id}`, M, doc.y, { width: textW, align: 'left' });
   doc.moveDown(0.5);
 
   // ── Applicant name (title + name, no duplication) ──
   doc.font(fBold).fontSize(10).fillColor(black)
     .text(d.fullName, { width: textW });
-  doc.font(fReg).fontSize(9).fillColor(grey)
-    .text(`Email: ${app.email || ''}`, { width: textW });
+  // Contact block: email, address, phone (no labels) — single (1.0) line spacing.
+  // Phone shown with +233 country code (leading 0 dropped).
+  const fmtPhone = (p) => {
+    const s = String(p || '').trim().replace(/\s+/g, '');
+    if (!s) return '';
+    if (s.startsWith('+')) return s;                       // already has country code
+    if (s.startsWith('0')) return '+233' + s.slice(1);     // 0554360929 -> +233554360929
+    if (s.startsWith('233')) return '+' + s;               // 233554360929 -> +233554360929
+    return '+233' + s;
+  };
+  doc.font(fReg).fontSize(9).fillColor(grey);
+  if (app.email)          doc.text(`${app.email}`, { width: textW, lineGap: 0 });
+  if (app.postal_address) doc.text(`${app.postal_address}`, { width: textW, lineGap: 0 });
+  const phoneOut = fmtPhone(app.phone);
+  if (phoneOut)           doc.text(`${phoneOut}`, { width: textW, lineGap: 0 });
   doc.y = Math.max(doc.y, contentY + photoH + 6);
   doc.moveDown(0.7);
 
@@ -549,6 +563,15 @@ async function generateFromCode(app, choices, fees, photoPath, registrar) {
    ══════════════════════════════════════════════════════════ */
 async function generateAdmissionLetter(application, programmeChoices = []) {
   console.log(`  Generating letter for ${application.application_id}...`);
+
+  // Assign (or reuse) the stable reference number: WUC/APP/<counter><yy>
+  try {
+    application.reference_no = await getOrCreateReferenceNo(application);
+    console.log(`    Reference no: ${application.reference_no}`);
+  } catch (e) {
+    console.log(`    [ref] could not assign reference_no: ${e.message} — falling back to application_id`);
+  }
+
   const photoPath = await findPassportPhoto(application.id);
   const fees = await lookupFees(application, programmeChoices);
   const registrar = getRegistrarSettings();
