@@ -53,13 +53,25 @@ const ApplicationDetail: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    // Clear the previous applicant's data immediately so stale documents/details
+    // can never render under the newly-selected applicant.
+    setApp(null);
+    setNotes('');
+    setLoading(true);
     (async () => {
       try {
         const res = await fetch(`${API}/api/admin/applications/${applicationId}`, { headers: authHeaders() });
         const data = await res.json();
-        if (data.success) { setApp(data.application); setNotes(data.application.admin_notes || ''); }
-      } catch {} finally { setLoading(false); }
+        // Ignore a response that arrived after the user navigated to another applicant.
+        if (cancelled) return;
+        if (data.success && data.application.application_id === applicationId) {
+          setApp(data.application);
+          setNotes(data.application.admin_notes || '');
+        }
+      } catch {} finally { if (!cancelled) setLoading(false); }
     })();
+    return () => { cancelled = true; };
   }, [applicationId]);
 
   const doAction = async (action: string, body?: any) => {
@@ -566,7 +578,7 @@ const AdminDashboard: React.FC = () => {
       <header className="header">
         <div className="header-content">
           <div className="logo-section">
-            <img src="http://wuc.edu.gh/wp-content/uploads/2025/05/WC-logo-on-white-1.jpg" alt="WUC Logo" />
+            <img src="http://wuc.edu.gh/wp-content/uploads/2023/08/Withrow-Logo-scaled.jpg" alt="WUC Logo" />
             <div><h1>WUC Administration</h1><span className="logo-sub">Admissions Management</span></div>
           </div>
           <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: 1, marginLeft: '1.5rem' }}>
