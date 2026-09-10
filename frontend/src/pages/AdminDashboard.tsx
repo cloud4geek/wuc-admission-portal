@@ -32,11 +32,31 @@ const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB'
 /* ══════════════════════════════════════════════════════════
    Auth guard — redirects to login if no token
    ══════════════════════════════════════════════════════════ */
+const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes of inactivity
 const useAuthGuard = () => {
   const navigate = useNavigate();
   useEffect(() => {
     const token = localStorage.getItem('adminToken');
-    if (!token) navigate('/admin/login', { replace: true });
+    if (!token) { navigate('/admin/login', { replace: true }); return; }
+
+    // Auto sign-out after 10 minutes of inactivity
+    let timer: ReturnType<typeof setTimeout>;
+    const expire = () => {
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('adminUser');
+      navigate('/admin/login?expired=1', { replace: true });
+    };
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(expire, IDLE_TIMEOUT_MS);
+    };
+    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    events.forEach(e => window.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => {
+      clearTimeout(timer);
+      events.forEach(e => window.removeEventListener(e, reset));
+    };
   }, [navigate]);
 };
 

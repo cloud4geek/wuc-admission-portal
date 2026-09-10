@@ -25,7 +25,11 @@ const PasswordInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (pr
 const AdminLogin: React.FC = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
-  const [error, setError] = useState('');
+  const [error, setError] = useState(
+    () => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('expired') === '1')
+      ? 'Your session expired after 10 minutes of inactivity. Please sign in again.'
+      : ''
+  );
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
