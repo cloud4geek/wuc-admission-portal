@@ -33,12 +33,13 @@
 }
 
 .logo-section img {
-  height: 44px;
-  width: auto;
-  object-fit: contain;
+  height: 54px;
+  width: 54px;
+  object-fit: cover;
   background: white;
-  border-radius: var(--radius-xs);
-  padding: 3px 5px;
+  border-radius: 50%;
+  padding: 2px;
+  border: 2px solid rgba(255,255,255,0.3);
 }
 
 .logo-section h1 {

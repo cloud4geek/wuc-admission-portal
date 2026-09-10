@@ -66,33 +66,44 @@ const AdminLogin: React.FC = () => {
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'white',
-            borderRadius: 'var(--radius-md)',
-            padding: '0.75rem 1.25rem',
             marginBottom: '1rem',
-            boxShadow: 'var(--shadow-md)',
           }}>
-            <img src="http://wuc.edu.gh/wp-content/uploads/2025/05/WC-logo-on-white-1.jpg" alt="WUC Logo"
-              style={{ height: '40px', width: 'auto', objectFit: 'contain' }} />
+            <img src="http://wuc.edu.gh/wp-content/uploads/2023/08/Withrow-Logo-scaled.jpg" alt="Withrow University College"
+              style={{ height: '60px', width: 'auto', borderRadius: '8px', objectFit: 'contain' }} />
           </div>
           <h2 style={{ color: 'white', fontSize: '1.375rem', fontWeight: 800, letterSpacing: '-0.02em', marginBottom: '0.25rem' }}>
             Administration Portal
           </h2>
-          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.875rem' }}>Withrow University College</p>
         </div>
 
         {/* Card */}
         <div style={{
-          background: 'white',
+          background: 'rgba(255,255,255,0.08)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           borderRadius: 'var(--radius-lg)',
           padding: '2.25rem',
-          boxShadow: 'var(--shadow-xl)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1)',
+          border: '1px solid rgba(255,255,255,0.15)',
+          position: 'relative',
+          overflow: 'hidden',
         }}>
+          {/* Logo backdrop */}
+          <div style={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '250px', height: '250px',
+            backgroundImage: 'url(http://wuc.edu.gh/wp-content/uploads/2025/05/WC-logo-on-white-1.jpg)',
+            backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center',
+            opacity: 0.15, pointerEvents: 'none',
+            mixBlendMode: 'screen',
+          }} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
           {error && <div className="alert alert-error">{error}</div>}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', color: 'white' }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>Email Address</label>
+              <label style={{ color: 'rgba(255,255,255,0.9)' }}>Email Address</label>
               <input
                 type="email"
                 required
@@ -103,7 +114,7 @@ const AdminLogin: React.FC = () => {
               />
             </div>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>Password</label>
+              <label style={{ color: 'rgba(255,255,255,0.9)' }}>Password</label>
               <PasswordInput
                 required
                 value={form.password}
@@ -119,10 +130,11 @@ const AdminLogin: React.FC = () => {
           </form>
 
           <div style={{ textAlign: 'center', marginTop: '1.25rem' }}>
-            <Link to="/admin/forgot-password" style={{ fontSize: '0.875rem', color: 'var(--primary-light)' }}>
+            <Link to="/admin/forgot-password" style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.7)' }}>
               Forgot password?
             </Link>
           </div>
+          </div>{/* End zIndex wrapper */}
         </div>
 
         <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
