@@ -114,6 +114,17 @@ const ApplicationDetail: React.FC = () => {
     setApp((a: any) => ({ ...a, documents: a.documents.map((d: any) => d.id === docId ? { ...d, status: 'verified' } : d) }));
   };
 
+  const deleteDoc = async (docId: string, docName: string) => {
+    if (!window.confirm(`Remove this document${docName ? ` (${docName})` : ''}? This cannot be undone.`)) return;
+    const res = await fetch(`${API}/api/admin/documents/${docId}`, { method: 'DELETE', headers: authHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) {
+      setApp((a: any) => ({ ...a, documents: a.documents.filter((d: any) => d.id !== docId) }));
+    } else {
+      alert(data.message || 'Failed to remove document');
+    }
+  };
+
   if (loading) return <div className="spinner" />;
   if (!app) return <div className="card"><p>Application not found.</p></div>;
 
@@ -308,6 +319,12 @@ const ApplicationDetail: React.FC = () => {
                       ) : (
                         <span className="badge badge-success" style={{ fontSize: '0.6rem' }}>✓ Verified</span>
                       )}
+                      <button
+                        onClick={() => deleteDoc(doc.id, doc.document_name)}
+                        title="Remove document"
+                        className="btn btn-danger btn-sm"
+                        style={{ fontSize: '0.75rem', lineHeight: 1, padding: '0.25rem 0.5rem', fontWeight: 700 }}
+                      >✕</button>
                     </div>
                   </div>
                 ))}

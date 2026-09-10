@@ -340,6 +340,33 @@ const verifyDocument = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+/* ── DELETE /api/admin/documents/:documentId ── */
+const deleteDocument = async (req, res, next) => {
+  const { documentId } = req.params;
+  const adminId = req.admin?.adminId;
+  try {
+    // Fetch the row first so we can remove the file from disk too
+    const r = await pool.query('SELECT file_path FROM documents WHERE id=$1', [documentId]);
+    if (r.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+    const filePath = r.rows[0].file_path;
+
+    await pool.query('DELETE FROM documents WHERE id=$1', [documentId]);
+
+    // Best-effort file removal (don't fail the request if the file is already gone)
+    if (filePath) {
+      const fs = require('fs');
+      const path = require('path');
+      const abs = path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath);
+      fs.promises.unlink(abs).catch(() => {});
+    }
+
+    audit(adminId, 'delete_document', 'document', documentId, { filePath }, req.ip);
+    res.json({ success: true, message: 'Document deleted' });
+  } catch (error) { next(error); }
+};
+
 /* ── GET /api/admin/export/applications?type=&status= ── */
 const exportApplications = async (req, res, next) => {
   try {
@@ -815,7 +842,7 @@ module.exports = {
   getAllApplications, getApplicationDetail, approveApplication, rejectApplication,
   bulkAction, updateNotes, emailApplicant, regenerateLetter,
   getAllVouchers, cancelVoucher,
-  getDashboardStats, verifyDocument, exportApplications, getAuditLogs,
+  getDashboardStats, verifyDocument, deleteDocument, exportApplications, getAuditLogs,
   getAdminUsers, createAdminUser, toggleAdminUser,
   getAllFees, createFee, updateFee, deleteFee, lookupFee,
   getTemplate, uploadTemplate, updateTemplateFields, deleteTemplate,
