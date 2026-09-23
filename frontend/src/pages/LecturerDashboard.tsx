@@ -60,17 +60,8 @@ const LecturerDashboard: React.FC = () => {
     setSaving(false);
   };
 
-  const handlePublish = async () => {
-    if (!selectedCourse) return;
-    if (!window.confirm('Publish all draft grades? Students will be able to see their results immediately.')) return;
-    setSaving(true);
-    const data = await authFetch(`${API}/api/lecturers/courses/${selectedCourse.course_id}/publish`, {
-      method: 'POST', body: JSON.stringify({ academicYear: selectedCourse.academic_year, semester: selectedCourse.semester }),
-    });
-    if (data?.success) { setMsg(`Published ${data.published} result(s). Students can now view grades.`); loadStudents(selectedCourse); }
-    else setMsg(data?.message || 'Publish failed');
-    setSaving(false);
-  };
+  // Note: Publishing grades is intentionally restricted to the Registrar / Super Admin
+  // via the admin portal. Lecturers only submit grades as draft.
 
   const getGradeFromScore = (score: number) => {
     if (score >= 80) return { grade: 'A+', color: '#059669' };

@@ -213,6 +213,7 @@ const VoucherPurchase: React.FC = () => {
         {/* ── Retrieve Lost Voucher ── */}
         <VoucherRecovery />
       </div>
+      <Footer />
     </div>
   );
 };
