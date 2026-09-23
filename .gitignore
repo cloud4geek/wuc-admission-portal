@@ -68,3 +68,4 @@ Thumbs.db
 # Lock files (optional — uncomment if you don't want them in repo)
 # package-lock.json
 # frontend/package-lock.json
+node_modules
