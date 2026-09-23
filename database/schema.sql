@@ -69,6 +69,10 @@ CREATE TABLE IF NOT EXISTS applications (
     rejection_reason TEXT,
     admin_notes      TEXT,
 
+    -- Parent / guardian particulars
+    -- { name, phone, email, relationship, occupation, postalAddress }
+    guardian_info    JSONB DEFAULT '{}',
+
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

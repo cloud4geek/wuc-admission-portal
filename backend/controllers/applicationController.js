@@ -160,7 +160,7 @@ const submitApplication = async (req, res, next) => {
          application_id, voucher_id, application_type,
          title, first_name, last_name, other_names, date_of_birth,
          gender, nationality, hometown, postal_address, email, phone, physical_challenge,
-         enrollment_option, financing, candidate_type, total_years_worked, admin_notes
+         enrollment_option, financing, candidate_type, total_years_worked, guardian_info
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        RETURNING id`,
       [

@@ -92,10 +92,24 @@ async function autoMigrate() {
           admission_letter_url TEXT,
           rejection_reason TEXT,
           admin_notes TEXT,
+          guardian_info JSONB DEFAULT '{}',
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
       console.log('  ✅ applications');
+    } else {
+      // Ensure guardian_info column exists on pre-existing databases, and
+      // migrate any guardian data previously stored in admin_notes.
+      await client.query(`ALTER TABLE applications ADD COLUMN IF NOT EXISTS guardian_info JSONB DEFAULT '{}'`).catch(() => {});
+      await client.query(`
+        UPDATE applications
+        SET guardian_info = admin_notes::jsonb
+        WHERE (guardian_info IS NULL OR guardian_info = '{}'::jsonb)
+          AND admin_notes IS NOT NULL
+          AND admin_notes <> ''
+          AND admin_notes ~ '^\\s*\\{'
+          AND (admin_notes::jsonb ? 'name')
+      `).catch(() => {});
     }
 
     // ── programme_choices ──

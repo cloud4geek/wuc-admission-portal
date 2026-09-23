@@ -401,7 +401,24 @@ function writeFormBody(doc, application, programmeChoices, institutions, grades,
 
   // ── SECTION B — Parent / Guardian ────────────────────────────────────────
   const guardian = (() => {
-    try { return JSON.parse(application.admin_notes || '{}')?.guardian || {}; } catch { return {}; }
+    // Preferred source: dedicated guardian_info column
+    // ({ name, phone, email, relationship, occupation, postalAddress }).
+    const raw = application.guardian_info;
+    if (raw) {
+      try {
+        const g = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (g && typeof g === 'object' && g.name) return g;
+      } catch { /* fall through to legacy source */ }
+    }
+    // Legacy fallback: guardian data previously stored in admin_notes.
+    try {
+      const parsed = JSON.parse(application.admin_notes || '{}');
+      const g = parsed?.guardian || parsed || {};
+      return (g && typeof g === 'object') ? g : {};
+    } catch {
+      // admin_notes may contain free-text notes (e.g. manual enrolment) — no guardian.
+      return {};
+    }
   })();
   section('B', 'Particulars of Parent / Guardian');
   if (guardian.name) {
