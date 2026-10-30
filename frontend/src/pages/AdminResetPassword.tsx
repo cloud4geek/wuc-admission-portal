@@ -98,8 +98,8 @@ const AdminResetPassword: React.FC = () => {
             background: 'white', borderRadius: 'var(--radius-md)', padding: '0.75rem 1.25rem',
             marginBottom: '1rem', boxShadow: 'var(--shadow-md)',
           }}>
-            <img src="http://wuc.edu.gh/wp-content/uploads/2025/05/WC-logo-on-white-1.jpg" alt="WUC Logo"
-              style={{ height: '40px', width: 'auto', objectFit: 'contain' }} />
+            <img src="http://wuc.edu.gh/wp-content/uploads/2023/08/Withrow-Logo-scaled.jpg" alt="WUC Logo"
+              style={{ height: '54px', width: '54px', objectFit: 'cover', borderRadius: '50%' }} />
           </div>
           <h2 style={{ color: 'white', fontSize: '1.375rem', fontWeight: 800, marginBottom: '0.25rem' }}>Set New Password</h2>
           <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.875rem' }}>Withrow University College</p>

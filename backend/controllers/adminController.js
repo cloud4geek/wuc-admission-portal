@@ -148,7 +148,9 @@ const approveApplication = async (req, res, next) => {
       [adminId || null, admissionLetterUrl, applicationId.toUpperCase()]
     );
     audit(adminId, 'approve_application', 'application', application.id, { applicationId }, req.ip);
-    sendAdmissionLetter(application.email, application.first_name, admissionLetterUrl || '#').catch(() => {});
+    sendAdmissionLetter(application.email, application.first_name, admissionLetterUrl || '#')
+      .then(() => logger.info('Approval email sent', { applicationId, email: application.email }))
+      .catch(e => logger.error('Approval email FAILED', { applicationId, email: application.email, error: e.message }));
 
     // Create student account and send credentials via separate email
     try {
@@ -168,7 +170,9 @@ const approveApplication = async (req, res, next) => {
       .sort((a, b) => a.preference - b.preference)[0]?.programme_label || 'your selected programme';
     const enrollment = application.enrollment_option || 'Regular';
     const smsMsg = `Congratulations ${application.first_name}! Your WUC application (${applicationId}) has been APPROVED for ${programme} (${enrollment}). Download your admission letter at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/application-status`;
-    sendSMS(application.phone, smsMsg).catch(() => {});
+    sendSMS(application.phone, smsMsg)
+      .then(() => logger.info('Approval SMS sent', { applicationId, phone: application.phone }))
+      .catch(e => logger.error('Approval SMS FAILED', { applicationId, phone: application.phone, error: e.message }));
 
     res.json({ success: true, message: 'Application approved and admission letter generated', admissionLetterUrl });
   } catch (error) { next(error); }
@@ -191,7 +195,9 @@ const rejectApplication = async (req, res, next) => {
     // SMS notification for rejection
     const app = appResult.rows[0];
     const smsMsg = `Dear ${app.first_name}, we regret to inform you that your WUC application (${applicationId}) was not successful. Contact admissions@wuc.edu.gh for more information.`;
-    sendSMS(app.phone, smsMsg).catch(() => {});
+    sendSMS(app.phone, smsMsg)
+      .then(() => logger.info('Rejection SMS sent', { applicationId, phone: app.phone }))
+      .catch(e => logger.error('Rejection SMS FAILED', { applicationId, phone: app.phone, error: e.message }));
 
     res.json({ success: true, message: 'Application rejected' });
   } catch (error) { next(error); }
@@ -219,7 +225,9 @@ const bulkAction = async (req, res, next) => {
         try { letterPath = await generateAdmissionLetter(app, choices.rows); } catch { letterPath = null; }
         const url = letterPath ? `${process.env.API_URL || process.env.APP_URL}/${letterPath}` : null;
         await pool.query(`UPDATE applications SET status='approved', reviewed_at=NOW(), reviewed_by=$1, admission_letter_url=$2 WHERE application_id=$3`, [adminId, url, appId.toUpperCase()]);
-        sendAdmissionLetter(app.email, app.first_name, url || '#').catch(() => {});
+        sendAdmissionLetter(app.email, app.first_name, url || '#')
+          .then(() => logger.info('Bulk approval email sent', { applicationId: appId, email: app.email }))
+          .catch(e => logger.error('Bulk approval email FAILED', { applicationId: appId, email: app.email, error: e.message }));
         // Create student account and send credentials
         try {
           const { studentId, password, alreadyExists } = await createStudentAccount(app, choices.rows);
@@ -230,10 +238,14 @@ const bulkAction = async (req, res, next) => {
         } catch (err) { logger.error('Bulk student account creation failed', { appId, error: err.message }); }
         // SMS with programme details
         const prog = choices.rows.filter(c => c.programme_id !== 'mature-access' && !/mature access/i.test(c.programme_label || '')).sort((a, b) => a.preference - b.preference)[0]?.programme_label || 'your selected programme';
-        sendSMS(app.phone, `Congratulations ${app.first_name}! Your WUC application (${appId}) has been APPROVED for ${prog} (${app.enrollment_option || 'Regular'}). Download your admission letter at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/application-status`).catch(() => {});
+        sendSMS(app.phone, `Congratulations ${app.first_name}! Your WUC application (${appId}) has been APPROVED for ${prog} (${app.enrollment_option || 'Regular'}). Download your admission letter at ${process.env.APP_URL || 'https://apply.wuc.edu.gh'}/application-status`)
+          .then(() => logger.info('Bulk approval SMS sent', { applicationId: appId, phone: app.phone }))
+          .catch(e => logger.error('Bulk approval SMS FAILED', { applicationId: appId, phone: app.phone, error: e.message }));
       } else {
         await pool.query(`UPDATE applications SET status='rejected', reviewed_at=NOW(), reviewed_by=$1, rejection_reason=$2 WHERE application_id=$3`, [adminId, reason || null, appId.toUpperCase()]);
-        sendSMS(app.phone, `Dear ${app.first_name}, we regret to inform you that your WUC application (${appId}) was not successful. Contact admissions@wuc.edu.gh for more information.`).catch(() => {});
+        sendSMS(app.phone, `Dear ${app.first_name}, we regret to inform you that your WUC application (${appId}) was not successful. Contact admissions@wuc.edu.gh for more information.`)
+          .then(() => logger.info('Bulk rejection SMS sent', { applicationId: appId, phone: app.phone }))
+          .catch(e => logger.error('Bulk rejection SMS FAILED', { applicationId: appId, phone: app.phone, error: e.message }));
       }
       audit(adminId, `bulk_${action}`, 'application', app.id, { applicationId: appId }, req.ip);
       processed++;
@@ -346,6 +358,33 @@ const verifyDocument = async (req, res, next) => {
     await pool.query(`UPDATE documents SET status='verified', verified_at=NOW(), verified_by=$1 WHERE id=$2`, [adminId || null, documentId]);
     audit(adminId, 'verify_document', 'document', documentId, null, req.ip);
     res.json({ success: true, message: 'Document verified' });
+  } catch (error) { next(error); }
+};
+
+/* ── DELETE /api/admin/documents/:documentId ── */
+const deleteDocument = async (req, res, next) => {
+  const { documentId } = req.params;
+  const adminId = req.admin?.adminId;
+  try {
+    // Fetch the row first so we can remove the file from disk too
+    const r = await pool.query('SELECT file_path FROM documents WHERE id=$1', [documentId]);
+    if (r.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Document not found' });
+    }
+    const filePath = r.rows[0].file_path;
+
+    await pool.query('DELETE FROM documents WHERE id=$1', [documentId]);
+
+    // Best-effort file removal (don't fail the request if the file is already gone)
+    if (filePath) {
+      const fs = require('fs');
+      const path = require('path');
+      const abs = path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath);
+      fs.promises.unlink(abs).catch(() => {});
+    }
+
+    audit(adminId, 'delete_document', 'document', documentId, { filePath }, req.ip);
+    res.json({ success: true, message: 'Document deleted' });
   } catch (error) { next(error); }
 };
 
@@ -798,7 +837,9 @@ const manualEnrol = async (req, res, next) => {
 
     // Send admission letter email
     if (letterUrl) {
-      sendAdmissionLetter(email, firstName, letterUrl).catch(() => {});
+      sendAdmissionLetter(email, firstName, letterUrl)
+        .then(() => logger.info('Manual enrolment email sent', { applicationId, email }))
+        .catch(e => logger.error('Manual enrolment email FAILED', { applicationId, email, error: e.message }));
     }
 
     // Create student account and send credentials
@@ -837,7 +878,7 @@ module.exports = {
   getAllApplications, getApplicationDetail, approveApplication, rejectApplication,
   bulkAction, updateNotes, emailApplicant, regenerateLetter,
   getAllVouchers, cancelVoucher,
-  getDashboardStats, verifyDocument, exportApplications, getAuditLogs,
+  getDashboardStats, verifyDocument, deleteDocument, exportApplications, getAuditLogs,
   getAdminUsers, createAdminUser, toggleAdminUser,
   getAllFees, createFee, updateFee, deleteFee, lookupFee,
   getTemplate, uploadTemplate, updateTemplateFields, deleteTemplate,

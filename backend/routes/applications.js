@@ -166,4 +166,71 @@ router.get('/:applicationId/application-form', async (req, res) => {
   }
 });
 
+// Verify admission letter authenticity via QR code signature
+// GET /api/applications/verify-letter?id=<applicationId>&sig=<hmac>
+router.get('/verify-letter', async (req, res) => {
+  const { pool } = require('../config/database');
+  const { buildVerificationUrl } = require('../qr-util');
+  const crypto = require('crypto');
+
+  try {
+    const id = (req.query.id || '').toString().trim().toUpperCase();
+    const sig = (req.query.sig || '').toString().trim();
+
+    if (!id || !sig) {
+      return res.status(400).json({ valid: false, message: 'Missing verification parameters.' });
+    }
+
+    // Recompute the expected signature the same way qr-util does and compare
+    // in constant time to avoid timing attacks.
+    const expectedUrl = buildVerificationUrl(id);
+    const expectedSig = expectedUrl.split('sig=')[1] || '';
+
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expectedSig);
+    const sigOk = a.length === b.length && crypto.timingSafeEqual(a, b);
+
+    if (!sigOk) {
+      return res.status(200).json({
+        valid: false,
+        message: 'This admission letter could not be verified. The QR code signature is invalid.',
+      });
+    }
+
+    // Signature valid — confirm the application exists and is approved
+    const result = await pool.query(
+      `SELECT application_id, first_name, other_names, last_name, title,
+              status, application_type, created_at
+       FROM applications WHERE application_id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(200).json({
+        valid: false,
+        message: 'No admission record found for this letter.',
+      });
+    }
+
+    const app = result.rows[0];
+    const fullName = [app.title, app.first_name, app.other_names, app.last_name]
+      .filter(Boolean).join(' ');
+
+    return res.status(200).json({
+      valid: app.status === 'approved',
+      message: app.status === 'approved'
+        ? 'This is a genuine admission letter issued by Withrow University College.'
+        : 'This letter is not currently valid (application not approved).',
+      applicant: {
+        applicationId: app.application_id,
+        name: fullName,
+        programmeType: app.application_type,
+        status: app.status,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ valid: false, message: 'Verification failed. Please try again.' });
+  }
+});
+
 module.exports = router;

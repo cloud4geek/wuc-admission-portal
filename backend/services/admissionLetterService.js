@@ -4,8 +4,28 @@ const fs = require('fs');
 const path = require('path');
 const { pool } = require('../config/database');
 const { amountToWords, fmtGHS } = require('../utils/amountToWords');
+const { generateLetterQR } = require('../qr-util');
+const { getOrCreateReferenceNo } = require('../referenceNo');
 
-// Font paths — Arial supports the Ghana Cedi ₵ symbol
+/**
+ * Draw the verification QR code at the bottom-right of the current page.
+ * qrBuffer is a PNG Buffer (or null if QR generation failed).
+ */
+function drawQRBottomRight(doc, qrBuffer, W, M) {
+  if (!qrBuffer) return;
+  const qrSize = 90;
+  const labelH = 12;
+  const x = W - M - qrSize;
+  // Sit above the bottom margin/footer strip
+  const y = doc.page.height - M - qrSize - labelH;
+  try {
+    doc.image(qrBuffer, x, y, { fit: [qrSize, qrSize] });
+  } catch (e) {
+    console.log('    [qr] draw error:', e.message);
+  }
+}
+
+// Font paths — Arial supports the Ghana Cedi GHS symbol
 const FONT_REGULAR = 'C:\\Windows\\Fonts\\arial.ttf';
 const FONT_BOLD    = 'C:\\Windows\\Fonts\\arialbd.ttf';
 const USE_ARIAL    = fs.existsSync(FONT_REGULAR) && fs.existsSync(FONT_BOLD);
@@ -258,11 +278,11 @@ function buildLetterLines(app, choices, fees, registrar) {
   };
 }
 
-function writeBodyOnDoc(doc, app, choices, fees, photoPath, startY, M, W, registrar) {
+function writeBodyOnDoc(doc, app, choices, fees, photoPath, startY, M, W, registrar, qrBuffer) {
   const d = buildLetterLines(app, choices, fees, registrar);
   const black = '#1a1a1a', grey = '#555', navy = '#0a2240';
 
-  // Register Arial if available (supports ₵)
+  // Register Arial if available (supports GHS)
   if (USE_ARIAL) {
     try {
       doc.registerFont('Body', FONT_REGULAR);
@@ -285,20 +305,33 @@ function writeBodyOnDoc(doc, app, choices, fees, photoPath, startY, M, W, regist
 
   const textW = photoPath ? (photoX - M - 12) : (W - 2 * M);
 
-  // ── Date ──
-  doc.font(fReg).fontSize(10).fillColor(black);
-  doc.text(d.dateStr, M, contentY, { width: textW });
+  // ── Date — aligned to the extreme right, UPPERCASE and BOLD ──
+  doc.font(fBold).fontSize(10).fillColor(black);
+  doc.text(String(d.dateStr).toUpperCase(), M, contentY, { width: textW, align: 'right' });
   doc.moveDown(0.4);
 
-  // ── Reference number ──
-  doc.text(`Reference no: ${app.application_id}`, { width: textW });
+  // ── Reference number (left-aligned, back to normal flow) ──
+  doc.text(`Reference no: ${app.reference_no || app.application_id}`, M, doc.y, { width: textW, align: 'left' });
   doc.moveDown(0.5);
 
   // ── Applicant name (title + name, no duplication) ──
   doc.font(fBold).fontSize(10).fillColor(black)
     .text(d.fullName, { width: textW });
-  doc.font(fReg).fontSize(9).fillColor(grey)
-    .text(`Email: ${app.email || ''}`, { width: textW });
+  // Contact block: email, address, phone (no labels) — single (1.0) line spacing.
+  // Phone shown with +233 country code (leading 0 dropped).
+  const fmtPhone = (p) => {
+    const s = String(p || '').trim().replace(/\s+/g, '');
+    if (!s) return '';
+    if (s.startsWith('+')) return s;                       // already has country code
+    if (s.startsWith('0')) return '+233' + s.slice(1);     // 0554360929 -> +233554360929
+    if (s.startsWith('233')) return '+' + s;               // 233554360929 -> +233554360929
+    return '+233' + s;
+  };
+  doc.font(fReg).fontSize(9).fillColor(grey);
+  if (app.email)          doc.text(`${app.email}`, { width: textW, lineGap: 0 });
+  if (app.postal_address) doc.text(`${app.postal_address}`, { width: textW, lineGap: 0 });
+  const phoneOut = fmtPhone(app.phone);
+  if (phoneOut)           doc.text(`${phoneOut}`, { width: textW, lineGap: 0 });
   doc.y = Math.max(doc.y, contentY + photoH + 6);
   doc.moveDown(0.7);
 
@@ -401,6 +434,9 @@ function writeBodyOnDoc(doc, app, choices, fees, photoPath, startY, M, W, regist
   doc.moveDown(0.2);
   doc.font(fBold).fontSize(10).fillColor(navy).text(registrar.name);
   doc.font(fReg).fontSize(9).fillColor(grey).text(`(${registrar.title})`);
+
+  // ── Verification QR code — bottom-right of the page ──
+  drawQRBottomRight(doc, qrBuffer, W, M);
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -412,12 +448,16 @@ async function generateWithPdfBackground(app, choices, fees, photoPath, bg, regi
   const finalPath = path.join(LETTERS_DIR, `${appId}.pdf`);
   const rel = `uploads/admission-letters/${appId}.pdf`;
 
+  // Verification QR (bottom-right)
+  let qrBuffer = null;
+  try { qrBuffer = await generateLetterQR(appId); } catch (e) { console.log('    [qr] gen error:', e.message); }
+
   // Step 1: Generate the letter body as a standalone PDF using PDFKit
   await new Promise((resolve, reject) => {
     const doc = new PDFDocumentKit({ size: 'A4', margin: 0 });
     const stream = fs.createWriteStream(tmpPath);
     doc.pipe(stream);
-    writeBodyOnDoc(doc, app, choices, fees, photoPath, bg.contentStartY, 60, doc.page.width, registrar);
+    writeBodyOnDoc(doc, app, choices, fees, photoPath, bg.contentStartY, 60, doc.page.width, registrar, qrBuffer);
     doc.end();
     stream.on('finish', resolve);
     stream.on('error', reject);
@@ -459,6 +499,10 @@ async function generateWithImageBackground(app, choices, fees, photoPath, bg, re
   const filePath = path.join(LETTERS_DIR, `${appId}.pdf`);
   const rel = `uploads/admission-letters/${appId}.pdf`;
 
+  // Verification QR (bottom-right)
+  let qrBuffer = null;
+  try { qrBuffer = await generateLetterQR(appId); } catch (e) { console.log('    [qr] gen error:', e.message); }
+
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocumentKit({ size: 'A4', margin: 0 });
@@ -475,7 +519,7 @@ async function generateWithImageBackground(app, choices, fees, photoPath, bg, re
         console.error(`    [image-bg] Failed: ${e.message}`);
       }
 
-      writeBodyOnDoc(doc, app, choices, fees, photoPath, bg.contentStartY, 60, W, registrar);
+      writeBodyOnDoc(doc, app, choices, fees, photoPath, bg.contentStartY, 60, W, registrar, qrBuffer);
 
       doc.end();
       stream.on('finish', () => { console.log(`    [image-bg] Written: ${rel}`); resolve(rel); });
@@ -492,6 +536,10 @@ async function generateFromCode(app, choices, fees, photoPath, registrar) {
   const appId = app.application_id;
   const filePath = path.join(LETTERS_DIR, `${appId}.pdf`);
   const rel = `uploads/admission-letters/${appId}.pdf`;
+
+  // Verification QR (bottom-right)
+  let qrBuffer = null;
+  try { qrBuffer = await generateLetterQR(appId); } catch (e) { console.log('    [qr] gen error:', e.message); }
 
   return new Promise((resolve, reject) => {
     try {
@@ -517,7 +565,7 @@ async function generateFromCode(app, choices, fees, photoPath, registrar) {
       doc.moveTo(M, doc.y).lineTo(W - M, doc.y).lineWidth(1).strokeColor(gold).stroke();
       doc.moveDown(0.6);
 
-      writeBodyOnDoc(doc, app, choices, fees, photoPath, doc.y, M, W, registrar);
+      writeBodyOnDoc(doc, app, choices, fees, photoPath, doc.y, M, W, registrar, qrBuffer);
 
       doc.rect(0, doc.page.height - 5, W, 5).fill(gold);
       doc.end();
@@ -532,6 +580,15 @@ async function generateFromCode(app, choices, fees, photoPath, registrar) {
    ══════════════════════════════════════════════════════════ */
 async function generateAdmissionLetter(application, programmeChoices = []) {
   console.log(`  Generating letter for ${application.application_id}...`);
+
+  // Assign (or reuse) the stable reference number: WUC/APP/<counter><yy>
+  try {
+    application.reference_no = await getOrCreateReferenceNo(application);
+    console.log(`    Reference no: ${application.reference_no}`);
+  } catch (e) {
+    console.log(`    [ref] could not assign reference_no: ${e.message} — falling back to application_id`);
+  }
+
   const photoPath = await findPassportPhoto(application.id);
   const fees = await lookupFees(application, programmeChoices);
   const registrar = getRegistrarSettings();

@@ -2,8 +2,8 @@
 echo 🚀 Auto-configuring AWS SES for WUC Admission Portal...
 
 REM Set AWS credentials
-set AWS_ACCESS_KEY_ID=AKIAWRU6VR7OUXBKDQNL
-set AWS_SECRET_ACCESS_KEY=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
+set AWS_ACCESS_KEY_ID=%AWS_ACCESS_KEY_ID%
+set AWS_SECRET_ACCESS_KEY=%AWS_SECRET_ACCESS_KEY%
 set AWS_DEFAULT_REGION=us-east-1
 
 echo 📧 Verifying email identity: admissions@wuc.edu.gh

@@ -33,11 +33,31 @@ const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('en-GB'
 /* ══════════════════════════════════════════════════════════
    Auth guard — redirects to login if no token
    ══════════════════════════════════════════════════════════ */
+const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes of inactivity
 const useAuthGuard = () => {
   const navigate = useNavigate();
   useEffect(() => {
     const token = localStorage.getItem('adminToken');
-    if (!token) navigate('/admin/login', { replace: true });
+    if (!token) { navigate('/admin/login', { replace: true }); return; }
+
+    // Auto sign-out after 10 minutes of inactivity
+    let timer: ReturnType<typeof setTimeout>;
+    const expire = () => {
+      localStorage.removeItem('adminToken');
+      localStorage.removeItem('adminUser');
+      navigate('/admin/login?expired=1', { replace: true });
+    };
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(expire, IDLE_TIMEOUT_MS);
+    };
+    const events: Array<keyof WindowEventMap> = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    events.forEach(e => window.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => {
+      clearTimeout(timer);
+      events.forEach(e => window.removeEventListener(e, reset));
+    };
   }, [navigate]);
 };
 
@@ -54,13 +74,25 @@ const ApplicationDetail: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    // Clear the previous applicant's data immediately so stale documents/details
+    // can never render under the newly-selected applicant.
+    setApp(null);
+    setNotes('');
+    setLoading(true);
     (async () => {
       try {
         const res = await fetch(`${API}/api/admin/applications/${applicationId}`, { headers: authHeaders() });
         const data = await res.json();
-        if (data.success) { setApp(data.application); setNotes(data.application.admin_notes || ''); }
-      } catch {} finally { setLoading(false); }
+        // Ignore a response that arrived after the user navigated to another applicant.
+        if (cancelled) return;
+        if (data.success && data.application.application_id === applicationId) {
+          setApp(data.application);
+          setNotes(data.application.admin_notes || '');
+        }
+      } catch {} finally { if (!cancelled) setLoading(false); }
     })();
+    return () => { cancelled = true; };
   }, [applicationId]);
 
   const doAction = async (action: string, body?: any) => {
@@ -101,6 +133,17 @@ const ApplicationDetail: React.FC = () => {
   const verifyDoc = async (docId: string) => {
     await fetch(`${API}/api/admin/documents/${docId}/verify`, { method: 'POST', headers: authHeaders() });
     setApp((a: any) => ({ ...a, documents: a.documents.map((d: any) => d.id === docId ? { ...d, status: 'verified' } : d) }));
+  };
+
+  const deleteDoc = async (docId: string, docName: string) => {
+    if (!window.confirm(`Remove this document${docName ? ` (${docName})` : ''}? This cannot be undone.`)) return;
+    const res = await fetch(`${API}/api/admin/documents/${docId}`, { method: 'DELETE', headers: authHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) {
+      setApp((a: any) => ({ ...a, documents: a.documents.filter((d: any) => d.id !== docId) }));
+    } else {
+      alert(data.message || 'Failed to remove document');
+    }
   };
 
   if (loading) return <div className="spinner" />;
@@ -297,6 +340,12 @@ const ApplicationDetail: React.FC = () => {
                       ) : (
                         <span className="badge badge-success" style={{ fontSize: '0.6rem' }}>✓ Verified</span>
                       )}
+                      <button
+                        onClick={() => deleteDoc(doc.id, doc.document_name)}
+                        title="Remove document"
+                        className="btn btn-danger btn-sm"
+                        style={{ fontSize: '0.75rem', lineHeight: 1, padding: '0.25rem 0.5rem', fontWeight: 700 }}
+                      >✕</button>
                     </div>
                   </div>
                 ))}
@@ -571,7 +620,7 @@ const AdminDashboard: React.FC = () => {
       <header className="header">
         <div className="header-content">
           <div className="logo-section">
-            <img src="http://wuc.edu.gh/wp-content/uploads/2025/05/WC-logo-on-white-1.jpg" alt="WUC Logo" />
+            <img src="http://wuc.edu.gh/wp-content/uploads/2023/08/Withrow-Logo-scaled.jpg" alt="WUC Logo" />
             <div><h1>WUC Administration</h1><span className="logo-sub">Admissions Management</span></div>
           </div>
           <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: 1, marginLeft: '1.5rem' }}>

@@ -8,7 +8,7 @@ const {
   getAllApplications, getApplicationDetail, approveApplication, rejectApplication,
   bulkAction, updateNotes, emailApplicant, regenerateLetter,
   getAllVouchers, cancelVoucher,
-  getDashboardStats, verifyDocument, exportApplications, getAuditLogs,
+  getDashboardStats, verifyDocument, deleteDocument, exportApplications, getAuditLogs,
   getAdminUsers, createAdminUser, toggleAdminUser,
   getAllFees, createFee, updateFee, deleteFee, lookupFee,
   getTemplate, uploadTemplate, updateTemplateFields, deleteTemplate,
@@ -57,6 +57,7 @@ router.post('/applications/bulk-action', [body('applicationIds').isArray({ min: 
 
 /* Documents */
 router.post('/documents/:documentId/verify', verifyDocument);
+router.delete('/documents/:documentId', deleteDocument);
 
 /* Vouchers */
 router.get('/vouchers', getAllVouchers);

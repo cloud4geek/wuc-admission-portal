@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import Footer from '../components/Footer';
 
 const ApplicationStatus: React.FC = () => {
   const [searchType, setSearchType] = useState('application');
@@ -60,9 +59,8 @@ const ApplicationStatus: React.FC = () => {
       <header className="header">
         <div className="header-content">
           <div className="logo-section">
-            <img src="http://wuc.edu.gh/wp-content/uploads/2025/05/WC-logo-on-white-1.jpg" alt="WUC Logo" />
+            <img src="http://wuc.edu.gh/wp-content/uploads/2023/08/Withrow-Logo-scaled.jpg" alt="Withrow University College" style={{ height: '54px', width: 'auto', borderRadius: '8px', objectFit: 'contain' }} />
             <div>
-              <h1>Withrow University College</h1>
               <span className="logo-sub">Admission Portal</span>
             </div>
           </div>
@@ -169,7 +167,6 @@ const ApplicationStatus: React.FC = () => {
           );
         })()}
       </div>
-      <Footer />
     </div>
   );
 };

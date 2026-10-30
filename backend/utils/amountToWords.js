@@ -56,12 +56,12 @@ function amountToWords(amount) {
 }
 
 function fmtGHS(n) {
-  return `GH\u20B5${parseFloat(n || 0).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `GHS ${parseFloat(n || 0).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-/** Safe version for pdf-lib which can't encode the ₵ symbol */
+/** Safe version for pdf-lib which can't encode the GHS symbol */
 function fmtGHSSafe(n) {
-  return `GHC ${parseFloat(n || 0).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `GHS ${parseFloat(n || 0).toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 module.exports = { amountToWords, fmtGHS, fmtGHSSafe, numberToWords };
