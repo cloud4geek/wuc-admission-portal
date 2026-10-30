@@ -406,6 +406,45 @@ async function autoMigrate() {
       console.log('  ✅ course_registrations');
     }
 
+    // ── lecturers ──
+    if (!has.has('lecturers')) {
+      await client.query(`
+        CREATE TABLE lecturers (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          staff_id VARCHAR(20) UNIQUE NOT NULL,
+          first_name VARCHAR(100) NOT NULL,
+          last_name VARCHAR(100) NOT NULL,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          phone VARCHAR(20),
+          department VARCHAR(100),
+          title VARCHAR(50) DEFAULT 'Mr.',
+          password_hash TEXT NOT NULL,
+          is_active BOOLEAN DEFAULT true,
+          last_login TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+      console.log('  ✅ lecturers');
+    } else {
+      // Add setup columns if missing
+      await client.query(`ALTER TABLE lecturers ADD COLUMN IF NOT EXISTS reset_token TEXT`).catch(() => {});
+      await client.query(`ALTER TABLE lecturers ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP`).catch(() => {});
+    }
+
+    // ── lecturer_courses (which courses a lecturer teaches) ──
+    if (!has.has('lecturer_courses')) {
+      await client.query(`
+        CREATE TABLE lecturer_courses (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          lecturer_id UUID NOT NULL REFERENCES lecturers(id) ON DELETE CASCADE,
+          course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+          academic_year VARCHAR(20) NOT NULL DEFAULT '2025/2026',
+          semester INTEGER NOT NULL,
+          UNIQUE (lecturer_id, course_id, academic_year, semester)
+        )`);
+      console.log('  ✅ lecturer_courses');
+    }
+
     // ── results ──
     if (!has.has('results')) {
       await client.query(`
@@ -527,45 +566,6 @@ async function autoMigrate() {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
       console.log('  ✅ exam_schedule');
-    }
-
-    // ── lecturers ──
-    if (!has.has('lecturers')) {
-      await client.query(`
-        CREATE TABLE lecturers (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          staff_id VARCHAR(20) UNIQUE NOT NULL,
-          first_name VARCHAR(100) NOT NULL,
-          last_name VARCHAR(100) NOT NULL,
-          email VARCHAR(255) UNIQUE NOT NULL,
-          phone VARCHAR(20),
-          department VARCHAR(100),
-          title VARCHAR(50) DEFAULT 'Mr.',
-          password_hash TEXT NOT NULL,
-          is_active BOOLEAN DEFAULT true,
-          last_login TIMESTAMP,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`);
-      console.log('  ✅ lecturers');
-    } else {
-      // Add setup columns if missing
-      await client.query(`ALTER TABLE lecturers ADD COLUMN IF NOT EXISTS reset_token TEXT`).catch(() => {});
-      await client.query(`ALTER TABLE lecturers ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP`).catch(() => {});
-    }
-
-    // ── lecturer_courses (which courses a lecturer teaches) ──
-    if (!has.has('lecturer_courses')) {
-      await client.query(`
-        CREATE TABLE lecturer_courses (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          lecturer_id UUID NOT NULL REFERENCES lecturers(id) ON DELETE CASCADE,
-          course_id UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-          academic_year VARCHAR(20) NOT NULL DEFAULT '2025/2026',
-          semester INTEGER NOT NULL,
-          UNIQUE (lecturer_id, course_id, academic_year, semester)
-        )`);
-      console.log('  ✅ lecturer_courses');
     }
 
     // ── Indexes ──
