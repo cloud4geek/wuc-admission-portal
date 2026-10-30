@@ -215,13 +215,35 @@ function buildLetterLines(app, choices, fees, registrar) {
     });
   }
 
+  // ── Provisions & accommodation ───────────────────────────────────────────
+  // Free accommodation is offered ONLY to REGULAR students. All Top-Up
+  // applicants are excluded from free accommodation, and their provided items
+  // depend on programme:
+  //   • Top-Up Public Health → Lab coat, Name Tag, Student ID
+  //   • Top-Up Nursing        → Lab coat, Uniform, Name Tag, Student ID
+  const isTopUp = (app.application_type || 'regular').toLowerCase() === 'topup';
+  const isNursing = /nursing/i.test(programme || '');
+  const provisionCondition = (() => {
+    if (!isTopUp) {
+      return `The College will provide you with Uniform, Laboratory coat, Name Tag and Student ID as well as ` +
+        `free accommodation. You will be attached to a Hostel/Hall on campus.`;
+    }
+    // Top-Up applicants: no free accommodation.
+    if (isNursing) {
+      return `The College will provide you with a Laboratory coat, Uniform, Name Tag and Student ID. ` +
+        `Please note that free accommodation is not available for Top-Up students.`;
+    }
+    // Top-Up Public Health (and any other Top-Up programme): items only.
+    return `The College will provide you with a Laboratory coat, Name Tag and Student ID. ` +
+      `Please note that free accommodation is not available for Top-Up students.`;
+  })();
+
   const conditions = [
     `You are to note that if it is discovered subsequently that you do not, in fact, possess the ` +
     `qualifications by virtue of which you have been offered admission to pursue the programme of study, ` +
     `you will be withdrawn immediately and possibly prosecuted. You will also be held personally liable ` +
     `for any false statement or omission made on your application form.`,
-    `The College will provide you with Uniform, Laboratory coat, Name Tag and Student ID as well as ` +
-    `free accommodation. You will be attached to a Hostel/Hall on campus.`,
+    provisionCondition,
     `You are also to note that your admission is subject to you being declared medically fit, you are ` +
     `therefore mandated to undergo a medical examination when you report on campus at a fee.`,
     `All students are considered to be under probation for the full duration of their programme, and ` +
