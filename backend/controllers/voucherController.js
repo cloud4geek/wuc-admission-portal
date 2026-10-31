@@ -36,7 +36,12 @@ const purchaseVoucher = async (req, res, next) => {
       });
 
       if (!paymentResult.success) {
-        return res.status(400).json({ success: false, message: 'Payment initiation failed: ' + (paymentResult.error || '') });
+        // Log the raw Paystack error server-side but don't expose it to the applicant
+        console.error('[Payment] Initiation failed:', paymentResult.error);
+        return res.status(400).json({
+          success: false,
+          message: 'Payment could not be initiated. Please try again or contact admissions@wuc.edu.gh for assistance.',
+        });
       }
 
       // If there's an authorization_url, return it for frontend redirect

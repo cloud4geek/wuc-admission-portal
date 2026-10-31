@@ -28,6 +28,12 @@ const initiatePayment = async (paymentData) => {
     };
   }
 
+  // Warn loudly if test keys are used in production — live keys required
+  if (process.env.NODE_ENV === 'production' && PAYSTACK_SECRET().startsWith('sk_test_')) {
+    console.error('[Payment] ⚠️  PAYSTACK TEST KEY detected in production! Set sk_live_... key in .env');
+    return { success: false, error: 'Payment service is not configured for live transactions. Please contact support.' };
+  }
+
   try {
     // Amount in pesewas (kobo equivalent for GHS) — Paystack uses smallest currency unit
     const amountInPesewas = Math.round((amount || 220) * 100);
