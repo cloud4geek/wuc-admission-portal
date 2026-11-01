@@ -10,6 +10,7 @@ const { pool } = require('./config/database');
 const logger = require('./utils/logger');
 const { errorHandler } = require('./middleware/errorHandler');
 const { autoMigrate } = require('./scripts/auto-migrate');
+const { startPeriodicCheck } = require('./services/paystackKeyService');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -139,16 +140,19 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/health', async (req, res) => {
+  const { getStatus } = require('./services/paystackKeyService');
   try {
     const dbStart = Date.now();
     await pool.query('SELECT 1');
     const dbLatency = Date.now() - dbStart;
+    const ps = getStatus();
     res.json({
       status: 'healthy',
       database: 'connected',
       dbLatencyMs: dbLatency,
       uptime: Math.floor(process.uptime()),
       memoryMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      paystack: { valid: ps.valid, isLive: ps.isLive || false, checkedAt: ps.checkedAt },
       timestamp: new Date().toISOString(),
       version: '2.1.0',
     });
@@ -170,6 +174,7 @@ app.use(errorHandler);
 /* ── Graceful startup ── */
 const server = app.listen(PORT, '127.0.0.1', async () => {
   await autoMigrate();
+  startPeriodicCheck(); // validate Paystack key on startup + every 6 hours
   logger.info(`WUC API running on port ${PORT} [${process.env.NODE_ENV}]`);
   logger.info(`CORS origins: ${allowedOrigins.join(', ')}`);
   if (isProd) {

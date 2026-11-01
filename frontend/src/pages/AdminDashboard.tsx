@@ -608,6 +608,7 @@ const AdminDashboard: React.FC = () => {
     { to: '/admin/announcements', label: '📢 Announcements' },
     { to: '/admin/portal-management', label: '🎓 Portal Admin' },
     ...(adminUser.role === 'super_admin' ? [{ to: '/admin/enrolments', label: '✅ Enrolments' }] : []),
+    ...(adminUser.role === 'super_admin' ? [{ to: '/admin/paystack', label: '💳 Paystack Key' }] : []),
   ];
 
   const isActive = (to: string, exact?: boolean) => exact ? location.pathname === to : location.pathname.startsWith(to) && to !== '/admin';
@@ -915,6 +916,9 @@ const AdminDashboard: React.FC = () => {
 
           {/* ── Manual Enrolments (super_admin only) ── */}
           <Route path="/enrolments" element={<ManualEnrolmentPage />} />
+
+          {/* ── Paystack Key Settings (super_admin only) ── */}
+          <Route path="/paystack" element={<PaystackSettingsPage />} />
         </Routes>
       </div>
     </div>
@@ -2333,6 +2337,170 @@ const AdminAnnouncementsPage: React.FC = () => {
           ))}
         </div>
       )}
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════════════════════
+   Paystack Key Settings Page (super_admin only)
+   ══════════════════════════════════════════════════════════ */
+const PaystackSettingsPage: React.FC = () => {
+  const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  const authHeaders = () => ({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${localStorage.getItem('adminToken') || ''}`,
+  });
+
+  const [status, setStatus] = useState<any>(null);
+  const [secretKey, setSecretKey] = useState('');
+  const [publicKey, setPublicKey] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const loadStatus = async () => {
+    try {
+      const res = await fetch(`${API}/api/admin/settings/paystack-key`, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.success) setStatus(data);
+    } catch { /* silent */ }
+  };
+
+  React.useEffect(() => { loadStatus(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!secretKey.trim()) return;
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`${API}/api/admin/settings/paystack-key`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ secretKey: secretKey.trim(), publicKey: publicKey.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMsg({ type: 'success', text: data.message });
+        setSecretKey('');
+        setPublicKey('');
+        loadStatus();
+      } else {
+        setMsg({ type: 'error', text: data.message || 'Update failed' });
+      }
+    } catch {
+      setMsg({ type: 'error', text: 'Network error. Please try again.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const keyBadge = status?.valid === true
+    ? { label: status.isLive ? '✅ Live — Active' : '⚠️ Test Key', color: status.isLive ? '#059669' : '#d97706' }
+    : status?.valid === false
+      ? { label: '❌ Invalid / Not Set', color: '#dc2626' }
+      : { label: '⏳ Checking...', color: '#6b7280' };
+
+  return (
+    <div>
+      <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '0.25rem' }}>Paystack Payment Key</h2>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+        Update your Paystack API keys here whenever you regenerate them on the Paystack dashboard.
+        The new key is validated against the Paystack API before being saved — no server restart needed.
+      </p>
+
+      {/* Current status card */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <h3 className="section-title">Current Key Status</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <span style={{
+            display: 'inline-block', padding: '0.35rem 0.9rem', borderRadius: '999px',
+            background: keyBadge.color + '1a', color: keyBadge.color,
+            fontWeight: 700, fontSize: '0.8rem',
+          }}>{keyBadge.label}</span>
+          {status?.keyPrefix && (
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+              {status.keyPrefix}
+            </span>
+          )}
+          {status?.checkedAt && (
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Last checked: {new Date(status.checkedAt).toLocaleString()}
+            </span>
+          )}
+          <button onClick={loadStatus} className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }}>↺ Refresh</button>
+        </div>
+        {status?.valid === false && (
+          <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', color: '#dc2626' }}>
+            ⚠️ Payment is currently unavailable for applicants. Update the key below to restore voucher purchases.
+          </div>
+        )}
+      </div>
+
+      {/* Update form */}
+      <div className="card">
+        <h3 className="section-title">Update Paystack Keys</h3>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+          Get your keys from <a href="https://dashboard.paystack.com/#/settings/developer" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>Paystack Dashboard → Settings → API Keys & Webhooks</a>.
+          Always use <strong>Live keys</strong> in production.
+        </p>
+
+        {msg && (
+          <div style={{
+            padding: '0.75rem 1rem', borderRadius: 'var(--radius-sm)', marginBottom: '1rem',
+            background: msg.type === 'success' ? '#f0fdf4' : '#fef2f2',
+            border: `1px solid ${msg.type === 'success' ? '#86efac' : '#fecaca'}`,
+            color: msg.type === 'success' ? '#166534' : '#dc2626',
+            fontSize: '0.85rem',
+          }}>{msg.text}</div>
+        )}
+
+        <form onSubmit={handleSave}>
+          <div className="form-group">
+            <label>Live Secret Key <span style={{ color: '#dc2626' }}>*</span></label>
+            <input
+              type="password"
+              value={secretKey}
+              onChange={e => setSecretKey(e.target.value)}
+              placeholder="sk_live_..."
+              style={{ fontFamily: 'monospace' }}
+              required
+            />
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+              Starts with <code>sk_live_</code> for production or <code>sk_test_</code> for testing.
+            </p>
+          </div>
+
+          <div className="form-group">
+            <label>Live Public Key <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(optional)</span></label>
+            <input
+              type="text"
+              value={publicKey}
+              onChange={e => setPublicKey(e.target.value)}
+              placeholder="pk_live_..."
+              style={{ fontFamily: 'monospace' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', marginTop: '0.5rem' }}>
+            <button type="submit" className="btn btn-primary" disabled={saving || !secretKey.trim()}>
+              {saving ? 'Validating & Saving...' : '🔑 Validate & Save Key'}
+            </button>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              Key is validated against Paystack before saving. No restart needed.
+            </span>
+          </div>
+        </form>
+
+        <div style={{ marginTop: '1.5rem', padding: '1rem', background: 'var(--info-bg)', border: '1px solid var(--info-border)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', color: 'var(--info)' }}>
+          <strong>How this works:</strong>
+          <ul style={{ margin: '0.5rem 0 0 1rem', lineHeight: 1.8 }}>
+            <li>The key is tested against the Paystack API before being accepted.</li>
+            <li>On success it's applied instantly (no restart) and written to the server's <code>.env</code> file.</li>
+            <li>The key is also checked automatically every 6 hours — if it becomes invalid, you'll see the ❌ badge above.</li>
+            <li>After regenerating on Paystack, paste the new key here and click Save.</li>
+          </ul>
+        </div>
+      </div>
     </div>
   );
 };

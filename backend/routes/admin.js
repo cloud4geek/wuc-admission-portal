@@ -346,4 +346,32 @@ router.post('/staff/:id/resend', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+/* ── Paystack Key Management ─────────────────────────────────────────── */
+const paystackKeyService = require('../services/paystackKeyService');
+
+// GET /api/admin/settings/paystack-key — check current key status
+router.get('/settings/paystack-key', authenticateAdmin, (req, res) => {
+  const status = paystackKeyService.getStatus();
+  res.json({
+    success: true,
+    keyPrefix: status.keyPrefix ? status.keyPrefix + '...' : null,
+    valid: status.valid,
+    isLive: status.isLive || false,
+    checkedAt: status.checkedAt,
+    reason: status.reason || null,
+  });
+});
+
+// PUT /api/admin/settings/paystack-key — update key (hot-swap + persist to disk)
+router.put('/settings/paystack-key', authenticateAdmin, async (req, res, next) => {
+  try {
+    const { secretKey, publicKey } = req.body;
+    if (!secretKey || typeof secretKey !== 'string' || !secretKey.startsWith('sk_')) {
+      return res.status(400).json({ success: false, message: 'Invalid secret key format. Must start with sk_live_ or sk_test_' });
+    }
+    const result = await paystackKeyService.updateKey(secretKey.trim(), publicKey?.trim());
+    res.json(result);
+  } catch (error) { next(error); }
+});
+
 module.exports = router;
